@@ -1,0 +1,111 @@
+{
+  "generated_by": "build_cars_final.py (finals v1)",
+  "units": "meters",
+  "note": "Lofted hulls driven by the verified blockout curves. Forward = glTF +Z after export.",
+  "materials": [
+    "paint_street",
+    "paint_perf",
+    "paint_super",
+    "glass",
+    "lights",
+    "lights_r",
+    "tire",
+    "rim",
+    "dark"
+  ],
+  "cars": [
+    {
+      "token": "street",
+      "display_name": "Vantoro RS",
+      "tri_count": 3856,
+      "dims": {
+        "length": 4.3,
+        "width": 1.95,
+        "height": 1.25
+      },
+      "wheelbase": 2.45,
+      "track": 1.56,
+      "nodes": [
+        "street_body",
+        "street_bumper_f",
+        "street_bumper_r",
+        "street_glass",
+        "street_hood",
+        "street_interior",
+        "street_lights_r",
+        "street_rim_fl",
+        "street_rim_fr",
+        "street_rim_rl",
+        "street_rim_rr",
+        "street_roof",
+        "street_spoiler",
+        "street_wheel_fl",
+        "street_wheel_fr",
+        "street_wheel_rl",
+        "street_wheel_rr"
+      ]
+    },
+    {
+      "token": "perf",
+      "display_name": "Kestrel MR",
+      "tri_count": 3880,
+      "dims": {
+        "length": 4.4,
+        "width": 2.04,
+        "height": 1.18
+      },
+      "wheelbase": 2.6,
+      "track": 1.64,
+      "nodes": [
+        "perf_body",
+        "perf_bumper_f",
+        "perf_bumper_r",
+        "perf_glass",
+        "perf_hood",
+        "perf_interior",
+        "perf_lights_r",
+        "perf_rim_fl",
+        "perf_rim_fr",
+        "perf_rim_rl",
+        "perf_rim_rr",
+        "perf_roof",
+        "perf_spoiler",
+        "perf_wheel_fl",
+        "perf_wheel_fr",
+        "perf_wheel_rl",
+        "perf_wheel_rr"
+      ]
+    },
+    {
+      "token": "super",
+      "display_name": "Apex GT1",
+      "tri_count": 3880,
+      "dims": {
+        "length": 4.6,
+        "width": 2.06,
+        "height": 1.13
+      },
+      "wheelbase": 2.72,
+      "track": 1.66,
+      "nodes": [
+        "super_body",
+        "super_bumper_f",
+        "super_bumper_r",
+        "super_glass",
+        "super_hood",
+        "super_interior",
+        "super_lights_r",
+        "super_rim_fl",
+        "super_rim_fr",
+        "super_rim_rl",
+        "super_rim_rr",
+        "super_roof",
+        "super_spoiler",
+        "super_wheel_fl",
+        "super_wheel_fr",
+        "super_wheel_rl",
+        "super_wheel_rr"
+      ]
+    }
+  ]
+}
