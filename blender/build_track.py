@@ -48,6 +48,7 @@ MAT = {
     "ocean":  pbr("ocean",  (0.05, 0.22, 0.45), 0.0, 0.25),
     "metal":  pbr("metal",  (0.65, 0.67, 0.70), 0.6, 0.45),
     "white":  pbr("white",  (0.85, 0.85, 0.82)),
+    "sign_red": pbr("sign_red", (0.75, 0.10, 0.08), 0.0, 0.5),
     "concrete": pbr("concrete", (0.55, 0.54, 0.52)),
     "building": pbr("building", (0.50, 0.48, 0.46)),
     "dark":   pbr("dark",   (0.10, 0.10, 0.12)),
@@ -482,8 +483,16 @@ def signs():
         name = "props_sign_chevron_" + pad(i * SPACING)
         verts, faces = [], []
         add_box_verts(verts, faces, (0.12, 0.12, 2.2), (px, py, p[2] + 1.1))
-        add_box_verts(verts, faces, (1.9, 2.2, 0.08), (px, py, p[2] + 2.6), yaw + math.pi / 2)
+        add_box_verts(verts, faces, (1.9, 0.08, 2.2), (px, py, p[2] + 1.35), yaw + math.pi / 2)
         mesh_from(name, verts, faces, MAT["white"])
+        sv, sf = [], []
+        wx, wy = -math.sin(yaw), math.cos(yaw)
+        fx, fy = -math.cos(yaw), -math.sin(yaw)
+        for off in (-0.62, 0.0, 0.62):
+            add_box_verts(sv, sf, (0.26, 0.10, 1.70),
+                          (px + wx * off + fx * 0.05, py + wy * off + fy * 0.05, p[2] + 1.35),
+                          yaw + math.pi / 2)
+        mesh_from(name + "_stripes", sv, sf, MAT["sign_red"])
         furniture.append({"type": "sign_chevron", "s": round(i * SPACING, 1),
                           "lateral": round(outer, 2), "node": name})
     print("SIGNS:", len(picked))
@@ -940,8 +949,16 @@ def cn_signs():
         name = "props_cn_sign_chevron_" + pad(i * SPACING)
         verts, faces = [], []
         add_box_verts(verts, faces, (0.12, 0.12, 2.2), (px, py, p[2] + 1.1))
-        add_box_verts(verts, faces, (1.9, 2.2, 0.08), (px, py, p[2] + 2.6), yaw + math.pi / 2)
+        add_box_verts(verts, faces, (1.9, 0.08, 2.2), (px, py, p[2] + 1.35), yaw + math.pi / 2)
         mesh_from(name, verts, faces, MAT["white"])
+        sv, sf = [], []
+        wx, wy = -math.sin(yaw), math.cos(yaw)
+        fx, fy = -math.cos(yaw), -math.sin(yaw)
+        for off in (-0.62, 0.0, 0.62):
+            add_box_verts(sv, sf, (0.26, 0.10, 1.70),
+                          (px + wx * off + fx * 0.05, py + wy * off + fy * 0.05, p[2] + 1.35),
+                          yaw + math.pi / 2)
+        mesh_from(name + "_stripes", sv, sf, MAT["sign_red"])
         furniture_cn.append({"type": "sign_chevron", "s": round(i * SPACING, 1),
                              "lateral": round(outer, 2), "node": name})
     print("SIGNS_CN:", len(picked))
