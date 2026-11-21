@@ -409,7 +409,7 @@ window.S9 = window.S9 || {};
     #attractCamera(dt) {
       const t = performance.now() / 1000;
       const p = this.car.mesh.position;
-      this.camera.position.set(p.x + Math.sin(t * 0.22) * 11, p.y + 4.2, p.z + Math.cos(t * 0.22) * 11);
+      this.camera.position.set(p.x + Math.sin(t * 0.22) * 13, p.y + 5.4, p.z + Math.cos(t * 0.22) * 13);
       this.camera.lookAt(p.x, p.y + 0.6, p.z);
       if (Math.abs(this.camera.fov - S9.CFG.camera.fov) > 0.05) {
         this.camera.fov = S9.CFG.camera.fov; this.camera.updateProjectionMatrix();

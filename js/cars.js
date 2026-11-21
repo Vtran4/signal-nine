@@ -67,9 +67,11 @@ window.S9 = window.S9 || {};
     return g;
   }
 
-  // Build a hero-car group from cars.glb. Modeler contract: flat node names
+  // Build a hero-car group from cars.glb. Modeler contract: node names
   // `<tok>_body/glass/hood/spoiler/lights_f/lights_r/bumper_f/bumper_r/wheel_fl|fr|rl|rr`,
-  // paint material slots paint_<tok>. Works for flat or nested hierarchies.
+  // paint material slots paint_<tok>. Wheel + rim ship as hub-local sibling
+  // node pairs (`_wheel_*` + `_rim_*`) — both must ride the spin/steer arrays
+  // or the rims stay frozen inside spinning tires. Works flat or nested.
   S9.buildCarFromGltf = function (gltf, classId, paintOverride) {
     const tok = ({ street: 'street', perf: 'perf', super: 'super' })[classId] || 'street';
     const group = new THREE.Group();
@@ -79,7 +81,7 @@ window.S9 = window.S9 || {};
       if (!node.name || !node.name.startsWith(tok + '_')) continue;
       const clone = node.clone(true);
       clone.traverse((o) => {
-        if (!/wheel/.test(o.name || '')) return;
+        if (!/wheel|rim/.test(o.name || '')) return;
         o.rotation.order = 'YXZ';           // steer (Y) then roll (X)
         wheels.push(o);
         if (/_fl$|_fr$/.test(o.name)) front.push(o);
@@ -89,6 +91,11 @@ window.S9 = window.S9 || {};
           o.material.color = new THREE.Color(paintColor);
           o.material.metalness = 0.45; o.material.roughness = 0.34;
           o.material.envMapIntensity = 1.0;
+        }
+        // rear light clusters: red emission on the new lights_r slot
+        if (o.isMesh && o.material && o.material.name === 'lights_r') {
+          o.material.emissive = new THREE.Color(0xff2a1a);
+          o.material.emissiveIntensity = 1.4;
         }
       });
       group.add(clone);
