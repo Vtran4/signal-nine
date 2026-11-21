@@ -5,6 +5,63 @@ window.S9 = window.S9 || {};
 (function () {
   const { clamp, lerp, rng } = S9.util;
 
+  // --- baked-static compose material (ported from the proven Cork Gallery shader) ---
+  // albedo sRGB + linear light map, unlit: color = albedo * rolloff(light) * gain + ambient
+  S9.composeMaterial = function (albedoTex, lightTex, gain = 2.4, ambient = 0.12, mipBias = 1.2) {
+    return new THREE.ShaderMaterial({
+      uniforms: {
+        uAlbedo: { value: albedoTex },
+        uLight: { value: lightTex },
+        uLightGain: { value: gain },
+        uAmbient: { value: ambient },
+        uMipBias: { value: mipBias },
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }`,
+      fragmentShader: `
+        uniform sampler2D uAlbedo;
+        uniform sampler2D uLight;
+        uniform float uLightGain;
+        uniform float uAmbient;
+        uniform float uMipBias;
+        varying vec2 vUv;
+        void main() {
+          vec3 alb = texture2D(uAlbedo, vUv, uMipBias).rgb;
+          vec3 l = texture2D(uLight, vUv).rgb;
+          l = l / (l + 0.55);   // gentle rolloff keeps hot bakes in range
+          gl_FragColor = vec4(alb * (l * uLightGain + uAmbient), 1.0);
+        }`,
+    });
+  };
+
+  // Apply bake.py's manifest: node lists -> atlas group materials. Returns a
+  // promise for the number of meshes swapped. loadTex(name, srgb) supplied by main.
+  S9.applyBakedStatics = function (staticRoot, manifest, loadTex) {
+    const groups = manifest.atlas_groups || {};
+    const nodeToGroup = {};
+    for (const g in groups) for (const n of groups[g].nodes || []) nodeToGroup[n] = g;
+    const GAIN = { coastal: 2.4, props: 2.2 };
+    return Promise.all(Object.keys(groups).map((g) =>
+      Promise.all([loadTex(groups[g].albedo, true), loadTex(groups[g].light, false)])
+        .then(([a, l]) => [g, S9.composeMaterial(a, l, GAIN[g] || 2.4, 0.12)])
+    )).then((pairs) => {
+      const mats = {};
+      for (const [g, m] of pairs) mats[g] = m;
+      let swapped = 0;
+      staticRoot.traverse((o) => {
+        if (o.isMesh && o.name && nodeToGroup[o.name]) {
+          o.material = mats[nodeToGroup[o.name]];
+          swapped++;
+        }
+      });
+      return swapped;
+    });
+  };
+
   class Track {
     constructor(scene, seed, data) {
       this.scene = scene;
@@ -162,6 +219,36 @@ window.S9 = window.S9 || {};
       this.#buildRoad();
       this.#buildRails();
       this.#buildSurrounds(seed || 1234);
+    }
+
+    // LOD policy: base mesh < 160m, _lod1 < 420m, _lod2 beyond. Heads follow
+    // their pole base. Called from the render loop (throttled).
+    collectLodGroups() {
+      const groups = {};
+      this.staticRoot.traverse((o) => {
+        if (!o.isMesh || !o.name) return;
+        const key = o.name.replace(/_head$/, '').replace(/_lod[12]$/, '');
+        const lod = o.name.endsWith('_lod1') ? 1 : o.name.endsWith('_lod2') ? 2 : 0;
+        (groups[key] = groups[key] || { meshes: [[], [], []] }).meshes[lod].push(o);
+      });
+      this.lodGroups = [];
+      for (const key in groups) {
+        const g = groups[key];
+        if (!g.meshes[1].length && !g.meshes[2].length) continue; // no LOD variants
+        const box = new THREE.Box3().setFromObject(g.meshes[0][0] || g.meshes[1][0]);
+        const center = box.getCenter(new THREE.Vector3());
+        this.lodGroups.push({ key, center, meshes: g.meshes });
+      }
+      return this.lodGroups.length;
+    }
+
+    applyLod(camPos) {
+      if (!this.lodGroups) return;
+      for (const g of this.lodGroups) {
+        const d = camPos.distanceTo(g.center);
+        const vis = [d < 160, d >= 160 && d < 420, d >= 420];
+        for (let i = 0; i < 3; i++) for (const m of g.meshes[i]) m.visible = vis[i];
+      }
     }
     #buildRoad() {
       const N = this.count, hw = this.halfW;

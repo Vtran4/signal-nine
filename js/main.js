@@ -52,6 +52,28 @@ window.S9 = window.S9 || {};
     } catch (e) { return null; }
   }
 
+  // atlas textures: embedded data URIs (file://) or fetch (localhost)
+  function makeTexLoader() {
+    return (name, srgb) => new Promise((res, rej) => {
+      const A = window.__S9_ASSETS;
+      const src = (A && A[name]) ? A[name] : 'assets/' + name;
+      new THREE.TextureLoader().load(src, (t) => {
+        if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+        t.anisotropy = 8;
+        res(t);
+      }, undefined, rej);
+    });
+  }
+
+  async function loadManifest() {
+    if (window.__S9_MANIFEST && window.__S9_MANIFEST.atlas_groups) return window.__S9_MANIFEST;
+    try {
+      const r = await fetch('assets/manifest.json');
+      if (r.ok) return await r.json();
+    } catch (e) { /* not baked yet */ }
+    return null;
+  }
+
   async function bootAsync() {
     const canvas = document.getElementById('c');
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -74,14 +96,24 @@ window.S9 = window.S9 || {};
     scene.add(sun);
 
     const trackData = await loadTrackData();
-    const [tracksGltf, carsGltf, envTex] = await Promise.all([loadGltf('tracks.glb'), loadGltf('cars.glb'), loadEnv()]);
+    const [tracksGltf, carsGltf, envTex, manifest] = await Promise.all([
+      loadGltf('tracks.glb'), loadGltf('cars.glb'), loadEnv(), loadManifest()]);
     const entry = trackData && trackData.tracks && trackData.tracks[0];
 
     const track = new S9.Track(scene, P.seed, entry || null);
     if (entry && tracksGltf) {
       track.hasGlbStatics = true;
+      track.staticRoot = tracksGltf.scene;
       scene.add(tracksGltf.scene);
       track.oncomingEdge = track.laneDodge + 0.3;
+      // baked atlases: unlit compose materials per manifest node lists
+      if (manifest) {
+        S9.applyBakedStatics(tracksGltf.scene, manifest, makeTexLoader())
+          .then((n) => { window.__bakeSwap = n; })
+          .catch((e) => { window.__errors.push({ m: 'bake swap: ' + (e && e.message || e), s: 'main.js', l: 0, c: 0, st: '' }); });
+        track.collectLodGroups();
+        window.__lodGroups = track.lodGroups ? track.lodGroups.length : 0;
+      }
     } else if (entry) {
       track.oncomingEdge = track.laneDodge + 0.3;
       track.buildProceduralMeshes(P.seed); // glb missing — greybox under-layer
@@ -153,12 +185,14 @@ window.S9 = window.S9 || {};
     });
 
     let last = performance.now();
+    let lodTick = 0;
     function loop(now) {
       requestAnimationFrame(loop);
       const dtRaw = clamp((now - last) / 1000, 0.001, S9.CFG.physics.dtMax);
       last = now;
 
       game.update(dtRaw);
+      if (track.lodGroups && (++lodTick % 12 === 0)) track.applyLod(camera.position);
       speedfx.render();
 
       // frame timing + scaler
