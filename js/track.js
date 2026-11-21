@@ -129,6 +129,12 @@ window.S9 = window.S9 || {};
       this.laneOncoming = this.lanesOpp[0];       // traffic oncoming = outer
       this.laneDodge = this.lanesOpp[this.lanesOpp.length - 1];     // bot dodge = inner oncoming
       this.laneSqueeze = 0.5;                     // squeeze-pass line between lanes
+      // narrow-road flag: 2-lane mountain cuts (canyon) keep all racing in the
+      // same-direction lanes — oncoming dodge is off, squeeze stays centered
+      if ((entry.roadWidth || 10) <= 8) {
+        this.laneDodge = 0.5;                     // dodge = squeeze line, never oncoming
+        this.laneOncoming = this.lanesOpp[0];
+      }
       this.furniture = entry.furniture || [];
       this.junctions = entry.junctions || [];
       this.name = entry.name || 'track';
