@@ -71,7 +71,7 @@ window.S9 = window.S9 || {};
       oncomingMinSpeed: 20,     // m/s before oncoming registers
       driftMinSpeed: 16, driftMinSlip: 0.24,
       nearMissGap: 2.35,        // max lateral gap (m) that still counts
-      nearMissRelSpeed: 11,     // min closing/passing speed (m/s)
+      nearMissRelSpeed: 5,      // min closing/passing speed (m/s)
     },
 
     track: {

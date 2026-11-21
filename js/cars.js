@@ -68,7 +68,9 @@ window.S9 = window.S9 || {};
   }
 
   class Car {
+    static _count = 0;
     constructor(track, cfg) {
+      this._id = ++Car._count;
       this.track = track; this.cfg = cfg;
       this.mesh = buildCarMesh(cfg);
       this.s = 30; this.lateral = 0; this.heading = track.tangentYawAt(30);
@@ -117,7 +119,8 @@ window.S9 = window.S9 || {};
 
     addNearMiss(heavy) {
       const B = S9.CFG.boost;
-      if (this.crashed) return;
+      this.nmCalls = (this.nmCalls || 0) + 1;
+      if (this.crashed) { this.nmSwallowed = (this.nmSwallowed || 0) + 1; return; }
       this.boost.meter = clamp(this.boost.meter + B.earn.nearMiss * (heavy ? 1.3 : 1), 0, 1);
       this.stats.nearMisses++;
     }
@@ -126,7 +129,7 @@ window.S9 = window.S9 || {};
       const cfg = this.cfg, T = this.track;
 
       if (this.crashed > 0) {
-        this.crashed -= dt;
+        this.crashed = Math.max(0, this.crashed - dt);
         this.speed = Math.max(0, this.speed - 30 * dt);
         if (this.crashed <= 0) this.#respawn();
         this.place();
@@ -159,9 +162,10 @@ window.S9 = window.S9 || {};
       this.speed = Math.max(0, this.speed + a * dt);
       if (this.boost.active) this.speed = Math.min(this.speed, top * 1.02);
 
-      // integrate in track space
+      // integrate in track space. d(lateral)/dt = dot(v, right) = -v·sin(slip):
+      // nose left of tangent (slip > 0) = moving toward the oncoming side.
       this.s = (this.s + this.speed * Math.cos(this.slip) * dt + T.length) % T.length;
-      this.lateral += this.speed * Math.sin(this.slip) * dt;
+      this.lateral -= this.speed * Math.sin(this.slip) * dt;
 
       // walls: clamp + scrub (graze tolerance — light contacts never crash).
       // Scrape response reflects the nose outward with a minimum kick — a pure
@@ -171,10 +175,12 @@ window.S9 = window.S9 || {};
         const side = Math.sign(this.lateral);
         this.lateral = side * lim;
         this.speed *= S9.CFG.physics.wallScrub;
-        const latVel = this.speed * Math.sin(this.slip);
+        const latVel = -this.speed * Math.sin(this.slip); // d(lateral)/dt
         if (latVel * side > 0) {
-          const slipOut = Math.asin(clamp(-latVel * 0.35 / Math.max(this.speed, 2), -0.45, 0.45));
-          this.heading = tangentYaw - side * Math.max(0.10, Math.abs(slipOut));
+          // scrape throws the car away from the wall — kick must beat the tire
+          // align term or the car oscillates pinned at the rail forever
+          const slipOut = Math.asin(clamp(latVel * 0.35 / Math.max(this.speed, 2), -0.45, 0.45));
+          this.heading = tangentYaw + side * Math.max(0.32, Math.abs(slipOut) * 1.2);
         }
         return 'wall';
       }
@@ -189,6 +195,8 @@ window.S9 = window.S9 || {};
 
     #respawn() {
       // replacement car, undamaged, boost emptied — crashes cost time, never the race
+      this.crashed = 0;   // MUST reset: a residual negative is truthy and
+                          // silently swallows every near-miss afterwards
       this.speed = 8;
       this.lateral = this.track.laneOffset;
       this.heading = this.track.tangentYawAt(this.s);

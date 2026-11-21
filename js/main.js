@@ -5,6 +5,7 @@ window.S9 = window.S9 || {};
   const P = S9.CFG.params;
 
   function boot() {
+    window.__boots = (window.__boots || 0) + 1;
     const canvas = document.getElementById('c');
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
     const baseDpr = Math.min(devicePixelRatio || 1, 2);
@@ -53,6 +54,8 @@ window.S9 = window.S9 || {};
       document.getElementById('boot').style.display = 'none';
       window.__ready = true;
       window.__state = () => game.state();
+      window.__dump = () => game.dumpTraffic();
+      window.__closelog = () => game.traffic.closeLog || [];
       return; // frozen — no RAF loop
     }
 
@@ -99,6 +102,8 @@ window.S9 = window.S9 || {};
       }
     }
     window.__state = () => game.state();
+    window.__dump = () => game.dumpTraffic();
+    window.__closelog = () => game.traffic.closeLog || [];
     requestAnimationFrame(loop);
   }
 

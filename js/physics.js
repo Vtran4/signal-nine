@@ -85,10 +85,14 @@ window.S9 = window.S9 || {};
           this.sparks.burst(p, 34, 9);
           events.push({ type: 'crash', heavy: c.t.mass >= 1.6 });
         } else {
-          const p = car.mesh.position;
-          this.sparks.burst(p, 8, 4);
-          car.graze(Math.sign(latGap) || 1);
-          events.push({ type: 'graze' });
+          // graze tolerance: scrub ONCE per contact, not per overlap frame
+          if (!(c.grazeCool > 0)) {
+            c.grazeCool = 0.6;
+            const p = car.mesh.position;
+            this.sparks.burst(p, 8, 4);
+            car.graze(Math.sign(latGap) || 1);
+            events.push({ type: 'graze' });
+          }
         }
         break; // one contact per frame is enough
       }

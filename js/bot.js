@@ -37,41 +37,62 @@ window.S9 = window.S9 || {};
       const speed = car.speed;
       const traffic = car.track.trafficRef;
       const laneR = track.laneOffset, laneL = -track.laneOffset;
+      const L = track.length;
+      const wrap = (d) => { d = d % L; if (d > L / 2) d -= L; if (d < -L / 2) d += L; return d; };
 
-      // lane choice: squeeze past same-direction traffic (near-miss window is
-      // 0–2.35m of gap — a full-lane dodge overshoots it), full-dodge into the
-      // oncoming lane only when it is time-clear, commit while in it.
       const R = this.#scan(traffic, car, laneR, speed);
       const Lft = this.#scan(traffic, car, laneL, speed);
-      const dodgeDist = 14 + speed * 1.0;
-      const dodgeT = 2.6; // min seconds until meeting nearest oncoming
+
+      // pass-state memory: commit once started, HOLD the squeeze line until
+      // genuinely clear (|ds| > 12) — without this the swing-wide overshoot
+      // passes at 4-6m separation and never crosses the near-miss window.
+      if (this.passing) {
+        const still = traffic.cars.includes(this.passing);
+        const ds = still ? wrap(this.passing.s - car.s) : 999;
+        if (!still || ds > (this.passDeep ? 20 : 12) || ds < -6) this.passing = null;
+      }
+      const dodgeT = 2.4; // min seconds until meeting nearest oncoming
+      // commit distance scales with closing speed — a fixed 40m commit at
+      // 80+ mph arrives alongside still 1m from the traffic car (clip/graze
+      // instead of near-miss). The lateral shift needs ~2.5-3s.
+      const closing = R.sameCar ? Math.max(2, speed - R.sameCar.speed) : 0;
+      const commitDist = Math.max(40, 22 + closing * 2.2);
+      if (!this.passing && R.sameCar && R.minSame < commitDist && Lft.minOppT > dodgeT) {
+        this.passing = R.sameCar;
+        this.passDeep = R.minSame < 15; // close car → full oncoming dodge
+      }
       let target = laneR;
-      const needPass = R.sameCar && R.minSame < dodgeDist;
-      if (needPass && Lft.minOppT > dodgeT) target = R.minSame < 12 ? laneL : -0.5;
-      else if (car.lateral < -1.2) {
+      if (this.passing) {
+        // bail out of a squeeze if an oncoming is about to arrive head-on
+        if (!this.passDeep && Lft.minOppT < 1.2) target = laneR;
+        else target = this.passDeep ? laneL : -0.7;
+      } else if (car.lateral < -0.9) {
         // committed to the oncoming run until the right lane is truly clear
         target = (R.minSame > 45 && R.minOppT > dodgeT) ? laneR : laneL;
       }
+      this.lastTarget = target;
 
       // boxed in behind same-direction traffic with nowhere to dodge: match speed.
       // Look-ahead windows SCALE with speed — fixed windows make the bot brake
       // constantly at 100+ mph and never get fast enough to dodge and earn.
-      const kNear = Math.abs(this.curvature(track, car.s, Math.max(8, speed * 0.4), speed * 1.4));
+      const kNear = Math.abs(this.curvature(track, car.s, Math.max(12, speed * 0.4), speed * 1.4));
       const kFar = Math.abs(this.curvature(track, car.s, speed * 1.4, speed * 2.8)) * 0.75;
       const kMax = Math.max(kNear, kFar);
       const vComfort = kMax > 1e-4 ? Math.sqrt(22.0 / kMax) : car.cfg.topSpeed;
       let vTarget = Math.min(vComfort, car.cfg.topSpeed);
-      if (target === laneR && R.sameCar && R.minSame < 34) vTarget = Math.min(vTarget, R.sameCar.speed - 1.0);
+      if (target === laneR && !this.passing && R.sameCar && R.minSame < 30) vTarget = Math.min(vTarget, R.sameCar.speed - 1.0);
+      // proportional braking (bang-bang from 106→17mph overshoots badly)
+      const over = speed - vTarget;
       let throttle = 1, brake = 0;
-      if (speed > vTarget * 1.06) { throttle = 0; brake = 1; }
-      else if (speed > vTarget) throttle = 0.3;
+      if (over > 1) { throttle = 0; brake = clamp(over / 9, 0.25, 1); }
+      else if (over > -2) throttle = clamp(0.5 + over * 0.2, 0.3, 1);
 
       // steering: curvature feedforward + lateral PD (steer + = left, +slip = left)
       const look = 12 + speed * 0.55;
       const k = this.curvature(track, car.s, look * 0.35, look * 1.35);
       const falloff = 1 / (1 + speed * 0.022);
       const ff = clamp(k * speed / (car.cfg.steerRate * falloff), -1, 1);
-      const steer = clamp(ff - (target - car.lateral) * 0.10 - car.slip * 1.25, -1, 1);
+      const steer = clamp(ff - (target - car.lateral) * 0.12 - car.slip * 1.6, -1, 1);
 
       // boost on a full meter when the road ahead is straight enough (speed-scaled)
       let boost = false;

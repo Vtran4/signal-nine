@@ -91,6 +91,7 @@ window.S9 = window.S9 || {};
         const c = this.cars[i];
         c.s = (c.s + c.dir * c.speed * dt + L) % L;
         c.cool = Math.max(0, c.cool - dt);
+        if (c.grazeCool > 0) c.grazeCool -= dt;
         const ds = this.#ds(c.s, player.s) * c.dir; // distance ahead in the car's own direction
         if (ds < window0 || ds > window1) {
           this.scene.remove(c.mesh);
@@ -102,14 +103,31 @@ window.S9 = window.S9 || {};
         c.mesh.rotation.y = this.track.tangentYawAt(c.s) + (c.dir < 0 ? Math.PI : 0);
 
         // near-miss: pass within a car width at high relative speed, no contact
+        // (suppressed while the player is crashing/respawning)
         const pdx = Math.abs(this.#ds(c.s, player.s));
         const latGap = Math.abs(c.lane - player.lateral) - (c.t.wid + 1.9) / 2;
         const rel = c.dir > 0 ? Math.abs(player.speed - c.speed) : player.speed + c.speed;
-        if (!c.passed && pdx < 3.2 && latGap > 0 && latGap < this.cfg.nearMissGap
-            && rel > this.cfg.nearMissRelSpeed && player.speed > 18) {
+        const NM = S9.CFG.boost; // near-miss thresholds live with the boost economy
+        if (player.crashed <= 0 && !c.passed && pdx < 3.2 && latGap > 0 && latGap < NM.nearMissGap
+            && rel > NM.nearMissRelSpeed && player.speed > 18) {
           c.passed = true; c.cool = this.cfg.nearMissCooldown;
+          this.fireCount = (this.fireCount || 0) + 1;
+          (this.closeLog = this.closeLog || []).push({ EV: 1, pdx: Math.round(pdx * 10) / 10, latGap: Math.round(latGap * 100) / 100, rel: Math.round(rel), mph: Math.round(player.speed * 2.23694) });
+          if (this.closeLog.length > 40) this.closeLog.splice(0, this.closeLog.length - 40);
           this.events.push({ type: 'nearmiss', relSpeed: rel, heavy: c.t.mass >= 1.6 });
+          if (this.onNearMiss) this.onNearMiss(rel, c.t.mass >= 1.6); // direct hook — events array is for replay/debug
         } else if (pdx > 6) c.passed = false;
+        // rejection telemetry: what killed the most recent close pass
+        if (!c.passed && pdx < 4 && latGap > 0 && latGap < 4) {
+          this.lastReject = {
+            latGap: Math.round(latGap * 100) / 100, rel: Math.round(rel * 10) / 10,
+            mph: Math.round(player.speed * 2.23694), why:
+              pdx >= 3.2 ? 'pdx' :
+              latGap >= NM.nearMissGap ? 'gap' :
+              rel <= NM.nearMissRelSpeed ? 'rel' :
+              player.speed <= 18 ? 'mph' : '?',
+          };
+        }
       }
     }
   }

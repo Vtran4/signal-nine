@@ -148,6 +148,21 @@ window.S9 = window.S9 || {};
       if (this.mode === 'drive' && !this.paused) {
         this.runTime += dt;
         const input = this.bot ? this.bot.update(this.car, this.track, dt) : this.#humanInput();
+        this.lastInput = { throttle: Math.round(input.throttle * 100) / 100, brake: input.brake, steer: Math.round(input.steer * 100) / 100, boost: input.boost };
+        this.lastTarget = this.bot ? this.bot.lastTarget : null;
+        if (!this.traffic.onNearMiss) {
+          this.traffic.onNearMiss = (rel, heavy) => {
+            this.car.nmCalls = (this.car.nmCalls || 0) + 1;
+            (this.traffic.closeLog = this.traffic.closeLog || []).push({
+              HOOK: 1, carId: this.car._id, crashed: Math.round(this.car.crashed * 100) / 100,
+              mph: Math.round(this.car.speed * 2.23694),
+            });
+            this.car.addNearMiss(heavy);
+            this.audio.fire('nearmiss');
+            this.physics.slowMo(0.22, 0.4);
+            showEvent(heavy ? 'NEAR MISS — HEAVY' : 'NEAR MISS');
+          };
+        }
         const ev = this.car.update(dt, input);
         this.traffic.update(dt, this.car);
         const hits = this.physics.resolve(this.car, this.traffic, dt);
@@ -248,6 +263,16 @@ window.S9 = window.S9 || {};
       else this.hud.chain.style.display = 'none';
     }
 
+    // diagnostics: traffic table relative to the player (pw_run debugging)
+    dumpTraffic() {
+      const L = this.track.length;
+      const wrap = (d) => { d = d % L; if (d > L / 2) d -= L; if (d < -L / 2) d += L; return d; };
+      return this.traffic.cars.map(c => ({
+        ds: Math.round(wrap(c.s - this.car.s)), lane: c.lane, dir: c.dir,
+        mph: Math.round(c.speed * 2.23694), passed: !!c.passed,
+      })).sort((a, b) => a.ds - b.ds);
+    }
+
     #loadBest() {
       try {
         const raw = localStorage.getItem('s9_best_day');
@@ -263,6 +288,17 @@ window.S9 = window.S9 || {};
         boostActive: this.car.boost.active,
         chain: this.car.boost.chain,
         stats: this.car.stats,
+        dbg: {
+          s: Math.round(this.car.s), lateral: Math.round(this.car.lateral * 10) / 10,
+          slip: Math.round(this.car.slip * 100) / 100,
+          input: this.lastInput, target: this.lastTarget,
+          traffic: this.traffic.cars.length,
+          fires: this.traffic.fireCount || 0,
+          carId: this.car._id, boots: window.__boots || 0,
+          nmCalls: this.car.nmCalls || 0, nmSwallowed: this.car.nmSwallowed || 0,
+          crashed: Math.round(this.car.crashed * 100) / 100,
+          lastReject: this.traffic.lastReject || null,
+        },
       });
     }
   }
