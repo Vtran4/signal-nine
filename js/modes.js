@@ -147,12 +147,12 @@ window.S9 = window.S9 || {};
   // puzzles). Launch straight down the runway; every staged vehicle hit adds
   // cash, combos multiply; the attempt ends when everything settles.
   const CRASH_TYPES = {
-    sedan: { len: 4.80, wid: 1.85, mass: 1.0 },
-    hatch: { len: 4.10, wid: 1.75, mass: 0.9 },
-    pickup: { len: 5.40, wid: 1.95, mass: 1.2 },
-    boxvan: { len: 5.80, wid: 2.05, mass: 1.6 },
-    bus: { len: 11.0, wid: 2.50, mass: 2.4 },
-    semi: { len: 16.0, wid: 2.45, mass: 3.2 },
+    sedan: { len: 4.80, wid: 1.85, hei: 1.42, mass: 1.0 },
+    hatch: { len: 4.10, wid: 1.75, hei: 1.46, mass: 0.9 },
+    pickup: { len: 5.40, wid: 1.95, hei: 1.72, mass: 1.2 },
+    boxvan: { len: 5.80, wid: 2.05, hei: 2.45, mass: 1.6 },
+    bus: { len: 11.0, wid: 2.50, hei: 2.85, mass: 2.4 },
+    semi: { len: 16.0, wid: 2.45, hei: 3.60, mass: 3.2 },
   };
   // ds = along the main road from the junction center; cross = along the arm
   const CRASH_LAYOUTS = [
@@ -187,6 +187,24 @@ window.S9 = window.S9 || {};
       { type: 'sedan', ds: 46, lateral: 3.6, onMain: true },
     ],
   ];
+
+  // hazard halo: additive sprite per hit prop — emissive dots are sub-pixel
+  // at payoff distance; a screen-space halo is what actually reads
+  let HALO_TEX = null;
+  function beaconHalo() {
+    if (!HALO_TEX) {
+      const cv = document.createElement('canvas'); cv.width = cv.height = 64;
+      const cx = cv.getContext('2d');
+      const g = cx.createRadialGradient(32, 32, 2, 32, 32, 30);
+      g.addColorStop(0, 'rgba(255,70,35,1)'); g.addColorStop(0.4, 'rgba(255,70,35,0.5)'); g.addColorStop(1, 'rgba(255,70,35,0)');
+      cx.fillStyle = g; cx.fillRect(0, 0, 64, 64);
+      HALO_TEX = new THREE.CanvasTexture(cv);
+    }
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: HALO_TEX, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.9 }));
+    spr.scale.set(3.6, 3.6, 1);
+    return spr;
+  }
 
   class Crash {
     constructor(game, junctionIdx) {
@@ -279,10 +297,12 @@ window.S9 = window.S9 || {};
 
       // prop integration: drift, spin, decay + sanity clamp (an ungated impulse
       // chain once flung props 300m off the junction)
-      const blink = Math.sin(performance.now() / 1000 * 9) > 0 ? 2.4 : 0.1;
+      const pulse = Math.sin(performance.now() / 1000 * 9);
+      const blink = pulse > 0 ? 4.5 : 1.2; // bright pulse, 1.2 dull-glow floor
       for (const p of this.props) {
         p.cool = Math.max(0, p.cool - dt);
         if (p.lights) for (const m of p.lights) m.emissiveIntensity = m.emissiveIntensity > 0 ? blink : 0;
+        if (p.halo) { p.halo.material.opacity = pulse > 0 ? 0.95 : 0.32; p.halo.scale.setScalar(pulse > 0 ? 4.6 : 3.4); }
         if (p.vel.lengthSq() > 0.01) {
           if (p.vel.length() > 18) p.vel.setLength(18);
           p.mesh.position.addScaledVector(p.vel, dt);
@@ -308,6 +328,9 @@ window.S9 = window.S9 || {};
             a.vel.multiplyScalar(0.5);
             if (!b.hit) {
               b.hit = true;
+              b.halo = beaconHalo();
+              b.halo.position.y = b.t.hei * 0.75 + 0.6;
+              b.mesh.add(b.halo);
               this.combo = Math.min(4, this.combo + 1);
               this.addCash(8000 * b.t.mass * this.combo, '$' + (8 * b.t.mass * this.combo).toFixed(0) + 'K ×' + this.combo);
             }
@@ -340,6 +363,9 @@ window.S9 = window.S9 || {};
               pr.mesh.traverse((o) => {
                 if (o.isMesh && o.material && /lights/.test(o.material.name || '')) pr.lights.push(o.material);
               });
+              pr.halo = beaconHalo();
+              pr.halo.position.y = pr.t.hei * 0.75 + 0.6;  // prop's own type record
+              pr.mesh.add(pr.halo);
               if (!this.impactPoint) {
                 this.impactPoint = pr.mesh.position.clone();
                 this.cine = 2.2;           // crash cinematic on the first big hit

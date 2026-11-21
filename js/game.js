@@ -147,6 +147,7 @@ window.S9 = window.S9 || {};
       if (this.bot) this.bot.crashHold = undefined;
       if (this.race) { this.race.dispose(); this.race = null; }
       if (this.crash) { this.crash.dispose(); this.crash = null; }
+      if (this.crashLight) { this.scene.remove(this.crashLight, this.crashLight.target); this.crashLight = null; }
     }
 
     toAttract() {
@@ -179,6 +180,16 @@ window.S9 = window.S9 || {};
 
     showCrashResults(idx, total) {
       this.mode = 'results';
+      // helicopter spotlight: downtown's dusk IBL can't light the wreck
+      // field — one pooled spot over the junction is the crash-mode payoff rig
+      if (this.crash && this.crash.junction && !this.crashLight) {
+        const c = this.track.posAt(this.crash.junction.s, 0);
+        const spot = new THREE.SpotLight(0xfff2dd, 2600, 140, 0.55, 0.55, 1.6);
+        spot.position.set(c.x + 8, c.y + 14, c.z + 6);
+        spot.target.position.copy(c);
+        this.scene.add(spot, spot.target);
+        this.crashLight = spot;
+      }
       const bestKey = 's9_crash_best';
       let best = 0;
       try {
@@ -316,11 +327,13 @@ window.S9 = window.S9 || {};
         // elevated establishing shot of the junction behind the results
         // panel — the pileup IS the payoff shot
         const ip = this.#crashCamPos();
-        if (ip) {
-          const t = performance.now() / 1000;
-          this.camera.position.set(ip.x + Math.sin(t * 0.25) * 17, ip.y + 9.5, ip.z + Math.cos(t * 0.25) * 17);
-          this.camera.lookAt(ip.x, ip.y + 0.5, ip.z);
-        }
+        // street-level orbit: downtown buildings occlude any high-angle view of
+              // the road corridor — 3m height looks ALONG the street where wrecks sit
+              if (ip) {
+                const t = performance.now() / 1000;
+                this.camera.position.set(ip.x + Math.sin(t * 0.25) * 15, ip.y + 3.0, ip.z + Math.cos(t * 0.25) * 15);
+                this.camera.lookAt(ip.x, ip.y + 1.1, ip.z);
+              }
       } else if (this.mode === 'attract') {
         this.#attractCamera(dtRaw);
       }
@@ -347,10 +360,13 @@ window.S9 = window.S9 || {};
     }
 
     #crashCamPos() {
-      // orbit target: the wrecked car's final position — it parks in the
-      // middle of its own wreck field, so the cluster frames with it.
-      // (Game's car is this.car; Crash owns the 'player' alias.)
-      return this.crash && this.car && this.car.mesh ? this.car.mesh.position.clone() : null;
+      // orbit center: the MIDPOINT of the wrecked car and the junction —
+      // the wreck field fans between them, so both frame together
+      if (this.crash && this.crash.junction && this.car && this.car.mesh) {
+        const jc = this.track.posAt(this.crash.junction.s, 0);
+        return jc.add(this.car.mesh.position).multiplyScalar(0.5);
+      }
+      return null;
     }
 
     #updateCamera(dt) {

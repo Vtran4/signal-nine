@@ -158,7 +158,7 @@ window.S9 = window.S9 || {};
     const physics = new S9.Physics(scene);
     const speedfx = new S9.SpeedFX(renderer, scene, camera, P.fx);
     const audio = new S9.AudioSet();
-    const game = new S9.Game({ scene, camera, renderer, track, car, traffic, physics, speedfx, audio, assets: { carsGltf } });
+    const game = new S9.Game({ scene, camera, renderer, track, car, traffic, physics, speedfx, audio, assets: { carsGltf, trafficGltf } });
     if (P.auto) game.bot = new S9.Bot();
 
     // state jump from URL (?state=)
