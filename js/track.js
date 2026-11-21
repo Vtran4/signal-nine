@@ -8,19 +8,26 @@ window.S9 = window.S9 || {};
   // --- baked-static compose material (ported from the proven Cork Gallery shader) ---
   // albedo sRGB + linear light map, unlit: color = albedo * rolloff(light) * gain + ambient
   S9.composeMaterial = function (albedoTex, lightTex, gain = 2.4, ambient = 0.12, mipBias = 1.2) {
-    return new THREE.ShaderMaterial({
-      uniforms: {
-        uAlbedo: { value: albedoTex },
-        uLight: { value: lightTex },
-        uLightGain: { value: gain },
-        uAmbient: { value: ambient },
-        uMipBias: { value: mipBias },
-      },
+    const mat = new THREE.ShaderMaterial({
+      uniforms: THREE.UniformsUtils.merge([
+        THREE.UniformsLib.fog,
+        {
+          uAlbedo: { value: albedoTex },
+          uLight: { value: lightTex },
+          uLightGain: { value: gain },
+          uAmbient: { value: ambient },
+          uMipBias: { value: mipBias },
+        },
+      ]),
+      fog: true,  // distant statics must haze into the horizon like Lambert does
       vertexShader: `
         varying vec2 vUv;
+        #include <fog_pars_vertex>
         void main() {
           vUv = uv;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+          gl_Position = projectionMatrix * mvPosition;
+          #include <fog_vertex>
         }`,
       fragmentShader: `
         uniform sampler2D uAlbedo;
@@ -29,13 +36,20 @@ window.S9 = window.S9 || {};
         uniform float uAmbient;
         uniform float uMipBias;
         varying vec2 vUv;
+        #include <fog_pars_fragment>
         void main() {
           vec3 alb = texture2D(uAlbedo, vUv, uMipBias).rgb;
           vec3 l = texture2D(uLight, vUv).rgb;
           l = l / (l + 0.55);   // gentle rolloff keeps hot bakes in range
           gl_FragColor = vec4(alb * (l * uLightGain + uAmbient), 1.0);
+          #include <fog_fragment>
         }`,
     });
+    // UniformsUtils.merge clones values — rebind textures so the live
+    // Texture objects (with their colorSpace/anisotropy settings) are used
+    mat.uniforms.uAlbedo.value = albedoTex;
+    mat.uniforms.uLight.value = lightTex;
+    return mat;
   };
 
   // Apply bake.py's manifest: node lists -> atlas group materials. Returns a

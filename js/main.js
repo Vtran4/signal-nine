@@ -84,7 +84,7 @@ window.S9 = window.S9 || {};
     renderer.toneMappingExposure = 1.05;
 
     const scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(S9.CFG.palette.fog, 260, 1700);
+    scene.fog = new THREE.Fog(S9.CFG.palette.fog, 420, 1900);
 
     const camera = new THREE.PerspectiveCamera(S9.CFG.camera.fov, innerWidth / innerHeight, 0.3, 4200);
     camera.position.set(0, 4, -10);
@@ -125,7 +125,8 @@ window.S9 = window.S9 || {};
       const pmrem = new THREE.PMREMGenerator(renderer);
       scene.environment = pmrem.fromEquirectangular(envTex).texture;
       scene.background = envTex;
-      scene.backgroundIntensity = 1.75; // early pano reads near-black through ACES — lift it
+      // HDRI pano (kloofendal) is properly exposed — stopgap lift retired
+      scene.backgroundIntensity = 1.0;
       if (track.sky) track.sky.visible = false; // pano replaces the gradient dome
     }
 
