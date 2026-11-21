@@ -23,7 +23,7 @@ os.makedirs(ASSETS, exist_ok=True)
 argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 MODE = argv[0] if argv else "--test"
 ENV_NAME = next((a.split("=", 1)[1] for a in argv if a.startswith("--env=")), None)
-GROUPS = {"coastal": 2048, "downtown": 2048, "props": 1024}
+GROUPS = {"coastal": 2048, "downtown": 2048, "props": 1024, "canyon": 2048}
 TEST_RES_SCALE = {"coastal": 512, "downtown": 512, "props": 512}
 SAMPLES = {"--test": 64, "--full": 384}
 MARGIN = {"--test": 4, "--full": 8}

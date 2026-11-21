@@ -299,6 +299,9 @@ window.S9 = window.S9 || {};
       this.mesh.position.copy(p);
       this.mesh.rotation.y = this.heading;
       this.mesh.rotation.z = -this.slip * 0.55;  // lean into the slide
+      // slope pitch: nose-up on climbs (negative x-rotation with +z forward) —
+      // the canyon's 80m of elevation makes a flat-pitched car read wrong
+      this.mesh.rotation.x = -(this.track.gradeAt ? this.track.gradeAt(this.s) : 0);
       if (this.shadowMesh) {
         // blob shadow tracks position + heading only (never the lean)
         this.shadowMesh.position.set(p.x, p.y + 0.05, p.z);

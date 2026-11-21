@@ -4,6 +4,7 @@
 window.S9 = window.S9 || {};
 (function () {
   const { clamp, lerp, rng } = S9.util;
+  const _gradeA = new THREE.Vector3(), _gradeB = new THREE.Vector3(); // gradeAt scratch
 
   // --- baked-static compose material (ported from the proven Cork Gallery shader) ---
   // albedo sRGB + linear light map, unlit: color = albedo * rolloff(light) * gain + ambient
@@ -208,6 +209,14 @@ window.S9 = window.S9 || {};
       return out;
     }
     tangentYawAt(s) { return this.#mix('yaw', this.sToIndex(s)); }
+    // road grade at s: slope of the spline over a ±6m window (smoothed for
+    // crest/valley transitions); feeds car pitch + canyon climb reads
+    gradeAt(s) {
+      const a = this.posAt(s - 6, 0, _gradeA), b = this.posAt(s + 6, 0, _gradeB);
+      const run = Math.hypot(b.x - a.x, b.z - a.z);
+      if (run < 0.01) return 0;
+      return Math.atan2(b.y - a.y, run);
+    }
     curvatureAt(s) {
       const i = this.sToIndex(s);
       const d = Math.abs(S9.util.angDiff(this.#mix('yaw', i + 4), this.#mix('yaw', i - 4))) / (8 * this.spacing);
