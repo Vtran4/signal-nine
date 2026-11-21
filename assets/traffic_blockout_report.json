@@ -6,12 +6,15 @@
     "paint_traffic",
     "glass",
     "lights",
-    "tire"
+    "tire",
+    "wood",
+    "metal"
   ],
+  "dressed": true,
   "vehicles": [
     {
       "type": "civ_sedan",
-      "tri_count": 224,
+      "tri_count": 296,
       "dims": {
         "length": 4.8,
         "width": 1.85,
@@ -25,18 +28,24 @@
       "track": 1.6,
       "wheel_radius": 0.33,
       "nodes": [
+        "sedan_antenna",
         "sedan_body",
         "sedan_bumper_f",
+        "sedan_exhaust",
         "sedan_glass",
         "sedan_lights_f",
         "sedan_lights_r",
+        "sedan_mirror_l",
+        "sedan_mirror_r",
+        "sedan_mirror_stalk_l",
+        "sedan_mirror_stalk_r",
         "sedan_wheel_fl",
         "sedan_wheel_fr"
       ]
     },
     {
       "type": "civ_hatch",
-      "tri_count": 224,
+      "tri_count": 296,
       "dims": {
         "length": 4.1,
         "width": 1.75,
@@ -52,16 +61,22 @@
       "nodes": [
         "hatch_body",
         "hatch_bumper_f",
+        "hatch_exhaust",
         "hatch_glass",
         "hatch_lights_f",
         "hatch_lights_r",
+        "hatch_mirror_l",
+        "hatch_mirror_r",
+        "hatch_mirror_stalk_l",
+        "hatch_mirror_stalk_r",
+        "hatch_spoiler",
         "hatch_wheel_fl",
         "hatch_wheel_fr"
       ]
     },
     {
       "type": "civ_pickup",
-      "tri_count": 224,
+      "tri_count": 320,
       "dims": {
         "length": 5.4,
         "width": 1.95,
@@ -75,18 +90,26 @@
       "track": 1.64,
       "wheel_radius": 0.37,
       "nodes": [
+        "pickup_bedload_0",
+        "pickup_bedload_1",
+        "pickup_bedload_2",
         "pickup_body",
         "pickup_bumper_f",
+        "pickup_exhaust",
         "pickup_glass",
         "pickup_lights_f",
         "pickup_lights_r",
+        "pickup_mirror_l",
+        "pickup_mirror_r",
+        "pickup_mirror_stalk_l",
+        "pickup_mirror_stalk_r",
         "pickup_wheel_fl",
         "pickup_wheel_fr"
       ]
     },
     {
       "type": "civ_boxvan",
-      "tri_count": 216,
+      "tri_count": 348,
       "dims": {
         "length": 5.8,
         "width": 2.05,
@@ -102,16 +125,27 @@
       "nodes": [
         "boxvan_body",
         "boxvan_bumper_f",
+        "boxvan_exhaust",
         "boxvan_glass",
         "boxvan_lights_f",
         "boxvan_lights_r",
+        "boxvan_mirror_l",
+        "boxvan_mirror_r",
+        "boxvan_mirror_stalk_l",
+        "boxvan_mirror_stalk_r",
+        "boxvan_rack_bar_0",
+        "boxvan_rack_bar_1",
+        "boxvan_rack_bar_2",
+        "boxvan_rack_bar_3",
+        "boxvan_rack_rail_l",
+        "boxvan_rack_rail_r",
         "boxvan_wheel_fl",
         "boxvan_wheel_fr"
       ]
     },
     {
       "type": "civ_bus",
-      "tri_count": 204,
+      "tri_count": 288,
       "dims": {
         "length": 11.0,
         "width": 2.5,
@@ -125,18 +159,25 @@
       "track": 2.1,
       "wheel_radius": 0.52,
       "nodes": [
+        "bus_acpod",
         "bus_body",
         "bus_bumper_f",
+        "bus_exhaust",
         "bus_glass",
+        "bus_grille",
         "bus_lights_f",
         "bus_lights_r",
+        "bus_mirror_l",
+        "bus_mirror_r",
+        "bus_mirror_stalk_l",
+        "bus_mirror_stalk_r",
         "bus_wheel_fl",
         "bus_wheel_fr"
       ]
     },
     {
       "type": "civ_semi",
-      "tri_count": 292,
+      "tri_count": 496,
       "dims": {
         "length": 16.0,
         "width": 2.45,
@@ -153,9 +194,26 @@
       "nodes": [
         "semi_body",
         "semi_bumper_f",
+        "semi_exhaust",
         "semi_glass",
         "semi_lights_f",
         "semi_lights_r",
+        "semi_mirror_l",
+        "semi_mirror_r",
+        "semi_mirror_stalk_l",
+        "semi_mirror_stalk_r",
+        "semi_mudflap_l",
+        "semi_mudflap_r",
+        "semi_rib_l_0",
+        "semi_rib_l_1",
+        "semi_rib_l_2",
+        "semi_rib_l_3",
+        "semi_rib_r_0",
+        "semi_rib_r_1",
+        "semi_rib_r_2",
+        "semi_rib_r_3",
+        "semi_stack_l",
+        "semi_stack_r",
         "semi_trailer",
         "semi_wheel_fl",
         "semi_wheel_fr",

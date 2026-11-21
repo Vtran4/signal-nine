@@ -11,6 +11,8 @@ import bmesh
 import json
 import math
 import os
+import random
+import zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ASSETS = os.path.normpath(os.path.join(HERE, "..", "..", "assets"))
@@ -37,6 +39,8 @@ MAT = {
     "glass": pbr("glass", (0.04, 0.06, 0.08), 0.35, 0.12),
     "lights": pbr("lights", (1.00, 0.97, 0.88), 0.0, 0.25),
     "tire": pbr("tire", (0.03, 0.03, 0.03), 0.0, 0.9),
+    "wood": pbr("wood", (0.45, 0.32, 0.18), 0.0, 0.8),
+    "metal": pbr("metal", (0.60, 0.62, 0.65), 0.8, 0.4),
 }
 
 def mesh_from(name, verts, faces, mat, location=(0, 0, 0)):
@@ -183,6 +187,58 @@ def build_civ(tok, spec):
     parts.append(box_at(tok + "_lights_r",
                         (spec["width"] * 0.55, 0.06, 0.10),
                         (0.0, tail - 0.02, spec["bump_u"] + 0.22), MAT["lights"]))
+    # dressing (deterministic per type): mirrors, exhaust, dents, type kit
+    rng = random.Random(zlib.crc32(tok.encode("utf-8")))
+    W = spec["width"]
+    mf = spec["canopy"][0][0]
+    mu = spec["canopy"][0][1] + 0.12
+    for sx in (-1, 1):
+        parts.append(box_at(tok + "_mirror_stalk_" + ("l" if sx < 0 else "r"),
+                            (0.16, 0.03, 0.03), (sx * (W / 2 + 0.08), mf, mu), MAT["tire"]))
+        parts.append(box_at(tok + "_mirror_" + ("l" if sx < 0 else "r"),
+                            (0.06, 0.09, 0.13), (sx * (W / 2 + 0.18), mf, mu), MAT["tire"]))
+    parts.append(box_at(tok + "_exhaust", (0.06, 0.20, 0.06),
+                        (W / 2 - 0.28, tail - 0.18, 0.26), MAT["tire"]))
+    amp = 0.020 if tok in ("bus", "semi", "boxvan") else 0.011
+    for p in parts:
+        if p.name in (tok + "_body", tok + "_cab", tok + "_trailer"):
+            for v in p.data.vertices:
+                v.co.x += rng.uniform(-amp, amp)
+                v.co.y += rng.uniform(-amp, amp)
+                v.co.z += rng.uniform(-amp, amp)
+    if tok == "sedan":
+        parts.append(box_at(tok + "_antenna", (0.02, 0.02, 0.42),
+                            (0.55, 1.55, 1.16), MAT["tire"]))
+    if tok == "hatch":
+        parts.append(box_at(tok + "_spoiler", (1.15, 0.16, 0.05),
+                            (0.0, spec["profile"][7][0] - 0.05,
+                             spec["profile"][7][1] + 0.06), MAT["paint_traffic"]))
+    if tok == "pickup":
+        for k, (bx, bf) in enumerate(((-0.38, 1.30), (0.30, 1.75), (-0.05, 2.25))):
+            parts.append(box_at(tok + "_bedload_" + str(k), (0.55, 0.55, 0.42),
+                                (bx, bf, 1.42), MAT["wood"]))
+    if tok == "boxvan":
+        for sx in (-1, 1):
+            parts.append(box_at(tok + "_rack_rail_" + ("l" if sx < 0 else "r"),
+                                (0.06, 3.2, 0.09), (sx * 0.72, 0.4, 2.56), MAT["metal"]))
+        for k in range(4):
+            parts.append(box_at(tok + "_rack_bar_" + str(k), (1.56, 0.06, 0.07),
+                                (0.0, -0.9 + k * 0.9, 2.60), MAT["metal"]))
+    if tok == "bus":
+        parts.append(box_at(tok + "_acpod", (2.2, 1.7, 0.35),
+                            (0.0, 1.4, 3.02), MAT["paint_traffic"]))
+        parts.append(box_at(tok + "_grille", (2.0, 0.06, 0.5),
+                            (0.0, 5.44, 1.6), MAT["tire"]))
+    if tok == "semi":
+        for sx in (-1, 1):
+            parts.append(box_at(tok + "_stack_" + ("l" if sx < 0 else "r"),
+                                (0.14, 0.14, 2.5), (sx * 0.82, -2.75, 2.1), MAT["metal"]))
+            parts.append(box_at(tok + "_mudflap_" + ("l" if sx < 0 else "r"),
+                                (0.42, 0.03, 0.42), (sx * 0.95, 7.35, 0.42), MAT["tire"]))
+            for k in range(4):
+                parts.append(box_at(tok + "_rib_" + ("l" if sx < 0 else "r") + "_" + str(k),
+                                    (0.05, 0.12, 2.2),
+                                    (sx * (W * 0.49), -0.8 + k * 2.2, 2.4), MAT["tire"]))
     for p in parts:
         if p is not body:
             p.parent = body
@@ -213,7 +269,7 @@ def tri_count(ob):
 
 report = {"generated_by": "build_traffic.py (blockout)", "units": "meters",
           "note": "Blockout massing, final node/material naming. Forward = glTF +Z after export. Shared paint_traffic slot; detach = civ_*_bumper_f only.",
-          "materials": list(MAT.keys()), "vehicles": []}
+          "materials": list(MAT.keys()), "dressed": True, "vehicles": []}
 for tok, spec in CIVS.items():
     objs = subtree(bodies[tok])
     tris = sum(tri_count(o) for o in objs)
