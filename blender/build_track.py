@@ -176,18 +176,24 @@ NX = int((TX1 - TX0) / CELL)
 NY = int((TY1 - TY0) / CELL)
 road_coarse = S[::8]
 def terrain_h(x, y):
-    h = (sin(x * 0.0021 + 1.3) * cos(y * 0.0017 + 0.7) * 9.0
-         + sin(x * 0.0043 + 0.2) * sin(y * 0.0039 + 1.1) * 5.0 + 14.0)
+    # noise tapers to 0 approaching the eastern shore: the waterline then
+    # crosses on the smooth cliff step alone (no 15m-cell stair silhouette)
+    shore_taper = 1.0 - smoothstep(0.0, 1.0, (x - 480.0) / 120.0)
+    h = ((sin(x * 0.0021 + 1.3) * cos(y * 0.0017 + 0.7) * 9.0
+          + sin(x * 0.0043 + 0.2) * sin(y * 0.0039 + 1.1) * 5.0) * shore_taper
+         + 14.0)
     best, bz = 1e9, 0.0
     for p in road_coarse:
         d = (p[0] - x) ** 2 + (p[1] - y) ** 2
         if d < best:
             best, bz = d, p[2]
     d = math.sqrt(best)
+    near = 1.0 - smoothstep(6.0, 22.0, d)  # 1 inside road corridor, 0 beyond
     if d < 22.0:
-        w = 1.0 - smoothstep(6.0, 22.0, d)
-        h = h * (1 - w) + (bz - 0.6) * w
-    h -= 42.0 * smoothstep(0.0, 1.0, (x - 540.0) / 220.0)   # eastern cliff into ocean
+        h = h * (1 - near) + (bz - 0.6) * near
+    # cliff into the ocean — suppressed inside the corridor so the road keeps
+    # its shoulder and the plunge happens just past the guardrail line
+    h -= 55.0 * smoothstep(0.0, 1.0, (x - 540.0) / 220.0) * (1.0 - near)
     h -= 18.0 * smoothstep(0.0, 1.0, (-y - 560.0) / 240.0)  # southern valley exit
     return h
 
