@@ -222,9 +222,10 @@ window.S9 = window.S9 || {};
       const view = S9.CFG.params.view;
       let camPos, look;
       if (view === 'hood' || view === 'bumper') {
-        const h = view === 'hood' ? 1.15 : 0.65;
-        camPos = p.clone().add(fwd.clone().multiplyScalar(view === 'hood' ? 0.3 : 1.1)).add(new THREE.Vector3(0, h, 0));
-        look = p.clone().add(fwd.clone().multiplyScalar(30)).add(new THREE.Vector3(0, h - 0.4, 0));
+        // hood cam rides ABOVE the roof deck (1.22m) — the hood/roof strip
+        // ahead fills the frame bottom as a real-geometry mount anchor
+        camPos = p.clone().add(fwd.clone().multiplyScalar(view === 'hood' ? 0.3 : 1.1)).add(new THREE.Vector3(0, view === 'hood' ? 1.38 : 0.65, 0));
+        look = p.clone().add(fwd.clone().multiplyScalar(view === 'hood' ? 26 : 30)).add(new THREE.Vector3(0, view === 'hood' ? 0.55 : 0.25, 0));
       } else if (view === 'track') {
         camPos = this.track.posAt(car.s + 60, 0).add(new THREE.Vector3(0, 26, 0));
         look = p.clone();
@@ -238,6 +239,9 @@ window.S9 = window.S9 || {};
         }
       }
       this.camera.position.lerp(camPos, clamp(dt * 8, 0, 1));
+      // rigid mounts (hood/bumper/track) must COPY — lerping a moving mount
+      // trails v/8 meters behind and silently becomes a chase view
+      if (view !== 'chase') this.camera.position.copy(camPos);
       this.camera.lookAt(look);
       const fov = C.fov + C.fovBoostKick * this.boostEase + speedNorm * 5;
       if (Math.abs(this.camera.fov - fov) > 0.05) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }

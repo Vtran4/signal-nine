@@ -88,6 +88,7 @@ window.S9 = window.S9 || {};
 
     const camera = new THREE.PerspectiveCamera(S9.CFG.camera.fov, innerWidth / innerHeight, 0.3, 4200);
     camera.position.set(0, 4, -10);
+    scene.add(camera); // camera children (hood anchor) render only if attached
 
     // sunny West Coast lighting (bakes take over for statics later)
     scene.add(new THREE.HemisphereLight(0xbfe3ff, 0x8a7a55, 0.95));
@@ -131,6 +132,7 @@ window.S9 = window.S9 || {};
     const carCfg = S9.CARS.find(c => c.id === P.car) || S9.CARS[0];
     const car = new S9.Car(track, carCfg);
     scene.add(car.mesh);
+    if (car.shadowMesh) scene.add(car.shadowMesh);
     if (carsGltf) {
       const old = car.mesh;
       car.swapMesh(S9.buildCarFromGltf(carsGltf, carCfg.id));

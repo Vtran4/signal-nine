@@ -102,6 +102,15 @@ window.S9 = window.S9 || {};
       this._id = ++Car._count;
       this.track = track; this.cfg = cfg;
       this.mesh = buildCarMesh(cfg);
+      // blob contact shadow — grounds the car until production-bake AO covers it
+      const shGeo = new THREE.CircleGeometry(1, 20);
+      shGeo.rotateX(-Math.PI / 2);
+      this.shadowMesh = new THREE.Mesh(shGeo, new THREE.MeshBasicMaterial({
+        color: 0x000000, transparent: true, opacity: 0.30, depthWrite: false,
+      }));
+      this.shadowMesh.scale.set(0.95, 1, 2.0); // footprint 1.9 × 4.0 m — just inside the car
+      this.shadowMesh.renderOrder = 1;
+      this.hasShadowBlob = true;
       this.s = 30; this.lateral = 0; this.heading = track.tangentYawAt(30);
       this.speed = 0; this.slip = 0; this.drifting = false;
       this.steerVis = 0;
@@ -264,6 +273,11 @@ window.S9 = window.S9 || {};
       this.mesh.position.copy(p);
       this.mesh.rotation.y = this.heading;
       this.mesh.rotation.z = -this.slip * 0.55;  // lean into the slide
+      if (this.shadowMesh) {
+        // blob shadow tracks position + heading only (never the lean)
+        this.shadowMesh.position.set(p.x, p.y + 0.05, p.z);
+        this.shadowMesh.rotation.y = this.heading;
+      }
       const wheels = this.meshWheels || this.mesh.userData.wheels || [];
       const front = new Set(this.meshFront || []);
       for (const w of wheels) {
