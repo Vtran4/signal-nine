@@ -67,7 +67,8 @@ window.S9 = window.S9 || {};
       const mesh = proto.mesh.clone();
       this.scene.add(mesh);
       const L = this.track.length;
-      let s = (playerS + (dir > 0 ? 40 : 0) + offsetHint + this.r.range(0, 40)) % L;
+      let s = (playerS + (dir > 0 ? 40 : 0) + offsetHint + this.r.range(0, 40));
+      s = this.track.closed ? s % L : clamp(s, 10, L - 10);
       this.cars.push({
         mesh, s, lane, dir,
         speed: this.r.range(this.cfg.speedMin, this.cfg.speedMax) * (dir > 0 ? 1 : 0.92),
@@ -75,9 +76,10 @@ window.S9 = window.S9 || {};
       });
     }
 
-    // wrap ds into [-L/2, L/2]
+    // wrap ds into [-L/2, L/2] on circuits; plain signed distance point-to-point
     #ds(a, b) {
       const L = this.track.length;
+      if (!this.track.closed) return a - b;
       let d = (a - b) % L;
       if (d > L / 2) d -= L; if (d < -L / 2) d += L;
       return d;
@@ -91,11 +93,14 @@ window.S9 = window.S9 || {};
       while (this.cars.length < this.cfg.density) this.#spawn(player.s, this.r.range(window1 * 0.5, window1));
       for (let i = this.cars.length - 1; i >= 0; i--) {
         const c = this.cars[i];
-        c.s = (c.s + c.dir * c.speed * dt + L) % L;
+        c.s = this.track.closed
+          ? (c.s + c.dir * c.speed * dt + L) % L
+          : c.s + c.dir * c.speed * dt;
         c.cool = Math.max(0, c.cool - dt);
         if (c.grazeCool > 0) c.grazeCool -= dt;
         const ds = this.#ds(c.s, player.s) * c.dir; // distance ahead in the car's own direction
-        if (ds < window0 || ds > window1) {
+        if (ds < window0 || ds > window1
+            || (!this.track.closed && (c.s < 0 || c.s > L))) {
           this.scene.remove(c.mesh);
           this.cars.splice(i, 1);
           continue;

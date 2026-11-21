@@ -131,6 +131,7 @@ window.S9 = window.S9 || {};
       this.furniture = entry.furniture || [];
       this.junctions = entry.junctions || [];
       this.name = entry.name || 'track';
+      this.id = entry.id || 'track';
     }
 
     // --- dense closed loop, resampled to exact 2m arc-length spacing ---
@@ -169,9 +170,10 @@ window.S9 = window.S9 || {};
         const a = pts[seg % pts.length], b = pts[(seg + 1) % pts.length];
         this.px[n] = lerp(a.x, b.x, f); this.py[n] = lerp(a.y, b.y, f); this.pz[n] = lerp(a.z, b.z, f);
       }
-      // tangents from neighbors (closed — seam handled by wrap)
+      // tangents from neighbors (closed: seam handled by wrap; open: one-sided at ends)
       for (let n = 0; n < N; n++) {
-        const a = (n - 1 + N) % N, b = (n + 1) % N;
+        const a = this.closed ? (n - 1 + N) % N : Math.max(0, n - 1);
+        const b = this.closed ? (n + 1) % N : Math.min(N - 1, n + 1);
         const dx = this.px[b] - this.px[a], dz = this.pz[b] - this.pz[a];
         const l = Math.hypot(dx, dz) || 1;
         this.tx[n] = dx / l; this.tz[n] = dz / l;
@@ -179,7 +181,10 @@ window.S9 = window.S9 || {};
       }
     }
 
-    #wrapI(i) { return ((i % this.count) + this.count) % this.count; }
+    #wrapI(i) {
+      if (this.closed) return ((i % this.count) + this.count) % this.count;
+      return clamp(i, 0, this.count - 1); // point-to-point: clamp, never wrap
+    }
 
     // interpolate sample at fractional sample-index
     #mix(aProp, i) {
@@ -187,7 +192,10 @@ window.S9 = window.S9 || {};
       const a = this[aProp][this.#wrapI(i0)], b = this[aProp][this.#wrapI(i0 + 1)];
       return lerp(a, b, f);
     }
-    sToIndex(s) { return (s / this.spacing) % this.count; }
+    sToIndex(s) {
+      const i = s / this.spacing;
+      return this.closed ? i % this.count : clamp(i, 0, this.count - 1.001);
+    }
 
     posAt(s, lateral = 0, out = new THREE.Vector3()) {
       const i = this.sToIndex(s);
@@ -282,6 +290,7 @@ window.S9 = window.S9 || {};
       }
       for (let n = 0; n < N; n++) {
         const a = n * 4, b = this.#wrapI(n + 1) * 4;
+        if (!this.closed && b === a) break; // point-to-point: no wrap quad at the finish
         // road top (up-facing: r × f = up)
         idx.push(a, a + 1, b, a + 1, b + 1, b);
         // left skirt (faces -right), right skirt (faces +right)

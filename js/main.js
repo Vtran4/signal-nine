@@ -99,7 +99,7 @@ window.S9 = window.S9 || {};
     const trackData = await loadTrackData();
     const [tracksGltf, carsGltf, envTex, manifest] = await Promise.all([
       loadGltf('tracks.glb'), loadGltf('cars.glb'), loadEnv(), loadManifest()]);
-    const entry = trackData && trackData.tracks && trackData.tracks[0];
+    const entry = trackData && trackData.tracks && (trackData.tracks.find(t => t.id === P.track) || trackData.tracks[0]);
 
     const track = new S9.Track(scene, P.seed, entry || null);
     if (entry && tracksGltf) {

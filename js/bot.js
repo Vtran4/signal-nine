@@ -39,7 +39,10 @@ window.S9 = window.S9 || {};
       const laneR = track.laneOffset, laneL = (track.laneDodge !== undefined ? track.laneDodge : -track.laneOffset);
       const squeeze = track.laneSqueeze !== undefined ? track.laneSqueeze : -0.7;
       const L = track.length;
-      const wrap = (d) => { d = d % L; if (d > L / 2) d -= L; if (d < -L / 2) d += L; return d; };
+      const wrap = (d) => {
+        if (!track.closed) return d;
+        d = d % L; if (d > L / 2) d -= L; if (d < -L / 2) d += L; return d;
+      };
 
       const R = this.#scan(traffic, car, laneR, speed);
       const Lft = this.#scan(traffic, car, laneL, speed);

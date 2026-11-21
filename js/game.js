@@ -270,7 +270,10 @@ window.S9 = window.S9 || {};
     // diagnostics: traffic table relative to the player (pw_run debugging)
     dumpTraffic() {
       const L = this.track.length;
-      const wrap = (d) => { d = d % L; if (d > L / 2) d -= L; if (d < -L / 2) d += L; return d; };
+      const wrap = (d) => {
+        if (!this.track.closed) return d;
+        d = d % L; if (d > L / 2) d -= L; if (d < -L / 2) d += L; return d;
+      };
       return this.traffic.cars.map(c => ({
         ds: Math.round(wrap(c.s - this.car.s)), lane: c.lane, dir: c.dir,
         mph: Math.round(c.speed * 2.23694), passed: !!c.passed,

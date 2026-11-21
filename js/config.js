@@ -47,6 +47,7 @@ window.S9 = window.S9 || {};
       seed: num('seed', 1234),
       t: num('t', 0),                           // simulate to t seconds, then freeze
       view: inSet('view', ['chase', 'hood', 'bumper', 'crash', 'track'], 'chase'),
+      track: inSet('track', ['coastal', 'downtown'], 'coastal'),
       state: q.get('state') || '',              // state jump: race | crash3 | results | boost | drive
       fx: q.get('fx') !== '0',                  // ?fx=0 disables the sense-of-speed pass
       lockres: bool('lockres'),                 // pin the dynamic-resolution scaler
