@@ -15,7 +15,7 @@ import os
 from mathutils import Vector
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ASSETS = os.path.normpath(os.path.join(HERE, "..", "assets"))
+ASSETS = os.path.normpath(os.path.join(HERE, "..", "..", "assets"))
 SHOTS = os.path.normpath(os.path.join(HERE, "..", "shots"))
 os.makedirs(ASSETS, exist_ok=True)
 os.makedirs(SHOTS, exist_ok=True)
