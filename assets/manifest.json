@@ -1,10 +1,10 @@
 {
   "generated_by": "bake.py",
-  "mode": "--test",
+  "mode": "--full",
   "atlas_groups": {
     "coastal": {
       "group": "coastal",
-      "res": 512,
+      "res": 2048,
       "albedo": "albedo_coastal.png",
       "light": "light_coastal.png",
       "nodes": [
@@ -29,7 +29,7 @@
     },
     "props": {
       "group": "props",
-      "res": 512,
+      "res": 1024,
       "albedo": "albedo_props.png",
       "light": "light_props.png",
       "nodes": [
