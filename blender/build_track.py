@@ -51,7 +51,13 @@ MAT = {
     "concrete": pbr("concrete", (0.55, 0.54, 0.52)),
     "building": pbr("building", (0.50, 0.48, 0.46)),
     "dark":   pbr("dark",   (0.10, 0.10, 0.12)),
+    "paint_white": pbr("paint_white", (0.82, 0.82, 0.80), 0.0, 0.6),
+    "paint_yellow": pbr("paint_yellow", (0.82, 0.62, 0.10), 0.0, 0.6),
+    "fascia": pbr("fascia", (0.30, 0.30, 0.33)),
 }
+
+BUILDING_TONES = [(0.50, 0.48, 0.46), (0.42, 0.40, 0.44), (0.55, 0.48, 0.38),
+                  (0.36, 0.38, 0.42), (0.58, 0.52, 0.50), (0.30, 0.31, 0.34)]
 
 # ---------------- mesh helpers ----------------
 def mesh_from(name, verts, faces, mat, location=(0, 0, 0)):
@@ -239,6 +245,55 @@ def build_road_mesh(name, S, LEFT, closed):
             uv.data[li].uv = uvs[vi]
     return ob
 
+def build_road_paint(name_w, name_y, S, LEFT, closed, skip_fn):
+    """Lane paint as geometry 2 cm above the ribbon: solid edge lines + dashed
+    lane splits (white mesh) + double-yellow center (yellow mesh). Breaks at
+    junction zones; closed loops wrap continuously (seam-safe dashes too)."""
+    n = len(S)
+    def allowed(i):
+        return skip_fn is None or not skip_fn((i % n) * SPACING)
+    def all_runs(mask):
+        runs, cur = [], []
+        for i in range(n):
+            if mask(i):
+                cur.append(i)
+            elif cur:
+                runs.append(cur)
+                cur = []
+        if cur:
+            runs.append(cur)
+        if closed and len(runs) > 1 and runs[0][0] == 0 and runs[-1][-1] == n - 1:
+            head = runs.pop(0)
+            runs[-1] = runs[-1] + [i - n for i in head]
+        return runs
+    def emit(verts, faces, idxs, lat, width):
+        base = len(verts)
+        for i in idxs:
+            p, l = S[i % n], LEFT[i % n]
+            for off in (lat - width / 2, lat + width / 2):
+                verts.append((p[0] + l[0] * off, p[1] + l[1] * off, p[2] + 0.02))
+        for k in range(len(idxs) - 1):
+            a = base + 2 * k
+            b = base + 2 * k + 2
+            faces.append((a, a + 1, b + 1, b))
+    def solid(verts, faces, lat, width):
+        for run in all_runs(lambda i: allowed(i)):
+            idxs = run[::2]
+            if closed and run[0] <= 0 and run[-1] >= n - 1 and idxs[-1] != n:
+                idxs = idxs + [n]
+            emit(verts, faces, idxs, lat, width)
+    vw, fw = [], []
+    solid(vw, fw, 4.7, 0.12)
+    solid(vw, fw, -4.7, 0.12)
+    for run in all_runs(lambda i: allowed(i) and (i % 9) < 2):
+        emit(vw, fw, run, 2.4, 0.14)
+        emit(vw, fw, run, -2.4, 0.14)
+    mesh_from(name_w, vw, fw, MAT["paint_white"])
+    vy, fy = [], []
+    solid(vy, fy, 0.16, 0.10)
+    solid(vy, fy, -0.16, 0.10)
+    mesh_from(name_y, vy, fy, MAT["paint_yellow"])
+
 # =====================================================================
 # TRACK 1 — COASTAL CIRCUIT (verified layout; call order preserves RNG)
 # =====================================================================
@@ -308,6 +363,8 @@ mesh_from("coastal_ocean",
           [(700, -1800, -0.25), (3200, -1800, -0.25),
            (3200, 1800, -0.25), (700, 1800, -0.25)],
           [(0, 1, 2, 3)], MAT["ocean"])
+
+build_road_paint("coastal_paint_w", "coastal_paint_y", S, LEFT, True, None)
 
 furniture = []
 
@@ -557,6 +614,8 @@ def build_junctions():
     print("JUNCTIONS:", len(junctions), [j["arm"] for j in junctions])
 
 build_junctions()
+build_road_paint("downtown_paint_w", "downtown_paint_y", S2, L2, False,
+                 lambda s: in_junction_zone(s, 4.0))
 
 def build_deck():
     spans = []
@@ -590,6 +649,28 @@ def build_deck():
                 o = base + 2 * k
                 faces.append((o, o + 2, o + 3, o + 1))
     mesh_from("downtown_deckbar", verts, faces, MAT["concrete"])
+    fv, ff = [], []
+    for a, b in spans:
+        for side in (-1, 1):
+            base = len(fv)
+            for i in range(a, b + 1):
+                p, l = S2[i], L2[i]
+                bx, by = p[0] + l[0] * (HW + 0.35) * side, p[1] + l[1] * (HW + 0.35) * side
+                fv.extend([(bx, by, p[2] - 0.05), (bx, by, p[2] - 1.35)])
+            m = b - a + 1
+            for k in range(m - 1):
+                o = base + 2 * k
+                ff.append((o, o + 2, o + 3, o + 1))
+        base = len(fv)
+        for i in range(a, b + 1):
+            p, l = S2[i], L2[i]
+            fv.extend([(p[0] + l[0] * (HW + 0.35), p[1] + l[1] * (HW + 0.35), p[2] - 1.35),
+                       (p[0] - l[0] * (HW + 0.35), p[1] - l[1] * (HW + 0.35), p[2] - 1.35)])
+        m = b - a + 1
+        for k in range(m - 1):
+            o = base + 2 * k
+            ff.append((o, o + 1, o + 3, o + 2))
+    mesh_from("downtown_fascia", fv, ff, MAT["fascia"])
     count = 0
     for a, b in spans:
         for i in range(a + 4, b - 3, 15):
@@ -609,8 +690,9 @@ def build_blocks():
     chunk = {"verts": [], "faces": [], "n": 0}
     def flush():
         if chunk["faces"]:
+            tone = random.choice(BUILDING_TONES)
             mesh_from("downtown_block_" + f"{chunk['n']:02d}", chunk["verts"],
-                      chunk["faces"], MAT["building"])
+                      chunk["faces"], pbr("building_t" + f"{chunk['n']:02d}", tone))
             chunk["n"] += 1
             chunk["verts"] = []
             chunk["faces"] = []
