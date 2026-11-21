@@ -38,6 +38,16 @@ window.S9 = window.S9 || {};
       mass: 1080, paint: 0xf2f0e6, paintName: 'Apex White', flake: 0.65,
       wheelbase: 2.72, trackWidth: 1.66, rideHeight: 0.09,
     },
+    { // Pursuit cruiser (M2) — heavy, tall, modest top end; ?car=police to drive it
+      id: 'police', name: 'INTERCEPTOR', cls: 'Pursuit', clsName: 'INTERCEPTOR',
+      topSpeed: 70,              // ~157 mph
+      boostTop: 80,
+      accel: 9.5, brake: 15, engineBrake: 2.2,
+      steerRate: 1.75, grip: 6.6, driftGrip: 2.7, driftYaw: 1.1,
+      mass: 1620, paint: 0xf2f2f0, paintName: 'Patrol White', flake: 0.2,
+      wheelbase: 2.95, trackWidth: 1.62, rideHeight: 0.14,
+      police: true,             // beacon alternation + slot mapping in buildCarFromGltf
+    },
   ];
 
   const CFG = {
@@ -51,7 +61,7 @@ window.S9 = window.S9 || {};
       state: q.get('state') || '',              // state jump: race | crash3 | results | boost | drive
       fx: q.get('fx') !== '0',                  // ?fx=0 disables the sense-of-speed pass
       lockres: bool('lockres'),                 // pin the dynamic-resolution scaler
-      car: inSet('car', ['street', 'perf', 'super'], 'street'),
+      car: inSet('car', ['street', 'perf', 'super', 'police'], 'street'),
     },
 
     palette: {

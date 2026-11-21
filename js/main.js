@@ -97,8 +97,8 @@ window.S9 = window.S9 || {};
     scene.add(sun);
 
     const trackData = await loadTrackData();
-    const [tracksGltf, carsGltf, trafficGltf, envTex, manifest] = await Promise.all([
-      loadGltf('tracks.glb'), loadGltf('cars.glb'), loadGltf('traffic.glb'), loadEnv(), loadManifest()]);
+    const [tracksGltf, carsGltf, trafficGltf, policeGltf, envTex, manifest] = await Promise.all([
+      loadGltf('tracks.glb'), loadGltf('cars.glb'), loadGltf('traffic.glb'), loadGltf('police.glb'), loadEnv(), loadManifest()]);
     // slot tints for the dressing props (wood crates, metal racks/stacks) —
     // the glb ships them unlit-flat; warm wood + steel reads weathered
     for (const node of trafficGltf.scene.children) node.traverse((o) => {
@@ -142,9 +142,15 @@ window.S9 = window.S9 || {};
     const car = new S9.Car(track, carCfg);
     scene.add(car.mesh);
     if (car.shadowMesh) scene.add(car.shadowMesh);
-    if (carsGltf) {
+    if (carsGltf && carCfg.id !== 'police') {
       const old = car.mesh;
       car.swapMesh(S9.buildCarFromGltf(carsGltf, carCfg.id));
+      scene.remove(old);
+      scene.add(car.mesh);
+      car.isGlb = true;
+    } else if (policeGltf && carCfg.id === 'police') {
+      const old = car.mesh;
+      car.swapMesh(S9.buildCarFromGltf(policeGltf, 'police'));
       scene.remove(old);
       scene.add(car.mesh);
       car.isGlb = true;
@@ -204,6 +210,7 @@ window.S9 = window.S9 || {};
       last = now;
 
       game.update(dtRaw);
+      S9.tickBeacons(dtRaw);            // shared lightbar/flasher clock
       if (track.lodGroups && (++lodTick % 12 === 0)) track.applyLod(camera.position);
       speedfx.render();
 

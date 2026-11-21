@@ -16,11 +16,12 @@ window.S9 = window.S9 || {};
     const glass = new THREE.MeshStandardMaterial({ color: 0x1c2c3c, metalness: 0.6, roughness: 0.15 });
 
     // class-proportioned blockout: long hood, wide stance, low roofline
-    const dims = {
+    const dims = ({
       street: { L: 4.3, W: 1.85, H: 0.62, cabL: 1.7, cabH: 0.5, cabZ: -0.35, nose: 0.55 },
       perf:   { L: 4.5, W: 1.95, H: 0.5,  cabL: 1.9, cabH: 0.42, cabZ: -0.55, nose: 0.7 },
       super:  { L: 4.6, W: 2.0,  H: 0.46, cabL: 1.6, cabH: 0.4,  cabZ: -0.75, nose: 0.85 },
-    }[cfg.id];
+      police: { L: 5.1, W: 1.95, H: 0.6,  cabL: 1.8, cabH: 0.5,  cabZ: -0.45, nose: 0.7 }, // full-size patrol coupe
+    })[cfg.id] || { L: 4.3, W: 1.85, H: 0.62, cabL: 1.7, cabH: 0.5, cabZ: -0.35, nose: 0.55 };
 
     const body = new THREE.Mesh(new THREE.BoxGeometry(dims.W, dims.H, dims.L), paint);
     body.position.y = 0.52;
@@ -72,11 +73,19 @@ window.S9 = window.S9 || {};
   // paint material slots paint_<tok>. Wheel + rim ship as hub-local sibling
   // node pairs (`_wheel_*` + `_rim_*`) — both must ride the spin/steer arrays
   // or the rims stay frozen inside spinning tires. Works flat or nested.
+  // The police cruiser rides the same contract plus a lightbar:
+  // `police_lightbar_red` / `police_lightbar_blue` lens nodes pulse in
+  // alternation (same pulse loop as the crash flashers).
+  // beacon clock: one shared phase for the police lightbar pulse
+  S9.BEACON_T = 0;
+  S9.tickBeacons = (dt) => { S9.BEACON_T += dt; };
   S9.buildCarFromGltf = function (gltf, classId, paintOverride) {
-    const tok = ({ street: 'street', perf: 'perf', super: 'super' })[classId] || 'street';
+    const tok = ({ street: 'street', perf: 'perf', super: 'super', police: 'police' })[classId] || 'street';
     const group = new THREE.Group();
     const wheels = [], front = [];
-    const paintColor = paintOverride || ({ street: 0xd8452e, perf: 0x2fb7a9, super: 0xf2f0e6 })[classId] || 0xcccccc;
+    const isPolice = classId === 'police';
+    const paintColor = paintOverride || ({ street: 0xd8452e, perf: 0x2fb7a9, super: 0xf2f0e6, police: 0xf2f2f0 })[classId] || 0xcccccc;
+    const beacons = { red: [], blue: [] };
     for (const node of gltf.scene.children) {
       if (!node.name || !node.name.startsWith(tok + '_')) continue;
       const clone = node.clone(true);
@@ -87,18 +96,28 @@ window.S9 = window.S9 || {};
         if (/_fl$|_fr$/.test(o.name)) front.push(o);
       });
       clone.traverse((o) => {
-        if (o.isMesh && o.material && o.material.name === 'paint_' + tok) {
+        if (o.isMesh && o.material && !isPolice && o.material.name === 'paint_' + tok) {
           o.material.color = new THREE.Color(paintColor);
           o.material.metalness = 0.45; o.material.roughness = 0.34;
           o.material.envMapIntensity = 1.0;
         }
-        // rear light clusters: red emission on the new lights_r slot
+        // rear light clusters: red emission on the lights_r slot
         if (o.isMesh && o.material && o.material.name === 'lights_r') {
           o.material.emissive = new THREE.Color(0xff2a1a);
           o.material.emissiveIntensity = 1.4;
         }
+        // police lightbar lenses: registered for the alternation pulse
+        if (o.isMesh && o.material && /lightbar_(red|blue)/.test(o.name || '')) {
+          const m = o.material;
+          m.emissive = new THREE.Color(o.name.endsWith('red') ? 0xff2222 : 0x2266ff);
+          m.emissiveIntensity = 0.2;
+          beacons[o.name.endsWith('red') ? 'red' : 'blue'].push(m);
+        }
       });
       group.add(clone);
+    }
+    if (isPolice && (beacons.red.length || beacons.blue.length)) {
+      group.userData.beacons = beacons;   // pulse loop in Car.update
     }
     return { group, wheels, front };
   };
@@ -290,6 +309,16 @@ window.S9 = window.S9 || {};
       for (const w of wheels) {
         w.rotation.x += this.speed * 0.06;
         if (front.has(w)) w.rotation.y = this.steerVis * 0.42;
+      }
+      // police lightbar: red/blue alternate at ~4.5 Hz — same pulse loop as
+      // the crash beacons; the opposing lens dims while the other flashes
+      const beacons = this.mesh.userData && this.mesh.userData.beacons;
+      if (beacons) {
+        const phase = Math.sin(S9.BEACON_T * 28);
+        const red = phase > 0 ? 5.0 : 0.15;
+        const blue = phase > 0 ? 0.15 : 5.0;
+        for (const m of beacons.red) m.emissiveIntensity = red;
+        for (const m of beacons.blue) m.emissiveIntensity = blue;
       }
     }
   }
