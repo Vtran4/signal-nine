@@ -44,14 +44,6 @@ window.S9 = window.S9 || {};
         d = d % L; if (d > L / 2) d -= L; if (d < -L / 2) d += L; return d;
       };
 
-      // open-track finish run: past the last corner window hold lane + throttle
-      // straight to the line — end-sample data artifacts must not grind the bot
-      if (!track.closed && car.s > L - 70) {
-        const steer = clamp(-(laneR - car.lateral) * 0.12 - car.slip * 1.6, -1, 1);
-        this.lastTarget = laneR;
-        return { throttle: 1, brake: 0, steer, boost: car.boost.meter >= 0.99, drift: false };
-      }
-
       const R = this.#scan(traffic, car, laneR, speed);
       const Lft = this.#scan(traffic, car, laneL, speed);
 

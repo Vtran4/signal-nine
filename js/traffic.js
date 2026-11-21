@@ -5,14 +5,17 @@ window.S9 = window.S9 || {};
 (function () {
   const { rng, clamp, angDiff } = S9.util;
 
-  // massing: [len (along s), wid (lateral), hei, wheelbase]; heavier = bigger = Crash jackpot later
+  // massing from modeler-s9's traffic blockout report (real footprints);
+  // heavier = bigger = Crash-mode jackpots later
   const TYPES = [
-    { name: 'sedan', len: 4.5, wid: 1.9, hei: 1.35, mass: 1.0 },
-    { name: 'pickup', len: 5.4, wid: 2.0, hei: 1.7, mass: 1.2 },
-    { name: 'van', len: 6.2, wid: 2.2, hei: 2.5, mass: 1.6 },
-    { name: 'bus', len: 9.5, wid: 2.5, hei: 2.9, mass: 2.4 },
-    { name: 'semi', len: 13.0, wid: 2.5, hei: 3.4, mass: 3.2 },
+    { name: 'sedan', len: 4.80, wid: 1.85, hei: 1.42, mass: 1.0 },
+    { name: 'hatch', len: 4.10, wid: 1.75, hei: 1.46, mass: 0.9 },
+    { name: 'pickup', len: 5.40, wid: 1.95, hei: 1.72, mass: 1.2 },
+    { name: 'boxvan', len: 5.80, wid: 2.05, hei: 2.45, mass: 1.6 },
+    { name: 'bus', len: 11.00, wid: 2.50, hei: 2.85, mass: 2.4 },
+    { name: 'semi', len: 16.00, wid: 2.45, hei: 3.60, mass: 3.2 },
   ];
+  const TYPE_WEIGHTS = ['sedan', 'sedan', 'sedan', 'hatch', 'hatch', 'pickup', 'boxvan', 'bus', 'semi'];
 
   function buildProto(type, color) {
     const g = new THREE.Group();
@@ -43,14 +46,31 @@ window.S9 = window.S9 || {};
   }
 
   class Traffic {
-    constructor(scene, track, seed) {
+    constructor(scene, track, seed, gltf) {
       this.scene = scene; this.track = track;
       this.r = rng(seed ^ 0x51f7);
       this.cfg = S9.CFG.traffic;
       this.cars = [];
       this.events = [];   // {type:'nearmiss', relSpeed, heavy}
-      this.protos = [];
-      for (const t of TYPES) for (const c of this.cfg.colors.slice(0, 3)) this.protos.push({ t, color: c, mesh: buildProto(t, c) });
+      if (gltf) {
+        // glb prototypes: node names are `<type>_*` (hierarchical under <type>_body)
+        this.protos = TYPES.map((t) => {
+          const g = new THREE.Group();
+          for (const node of gltf.scene.children) {
+            if (!node.name || !node.name.startsWith(t.name + '_')) continue;
+            g.add(node.clone(true));
+          }
+          return { t, mesh: g };
+        });
+        this.protoPick = () => {
+          const name = this.r.pick(TYPE_WEIGHTS);
+          return this.protos.find(p => p.t.name === name) || this.protos[0];
+        };
+      } else {
+        this.protos = [];
+        for (const t of TYPES) for (const c of this.cfg.colors.slice(0, 3)) this.protos.push({ t, color: c, mesh: buildProto(t, c) });
+        this.protoPick = () => this.r.pick(this.protos);
+      }
       this.playerS = 0;
     }
 
@@ -59,18 +79,20 @@ window.S9 = window.S9 || {};
     }
 
     #spawn(playerS, offsetHint) {
-      const proto = this.r.pick(this.protos);
+      const proto = this.protoPick();
       const dir = this.r() < 0.65 ? 1 : -1;                   // coastal highway: mostly with-traffic
       // with-traffic rides the outer right lane; oncoming the outer left lane
       const lane = dir > 0 ? this.track.laneOffset
         : (this.track.laneOncoming !== undefined ? this.track.laneOncoming : -this.track.laneOffset);
       const mesh = proto.mesh.clone();
+      const wheels = [];
+      mesh.traverse((o) => { if (/wheel/i.test(o.name || '')) { o.rotation.order = 'YXZ'; wheels.push(o); } });
       this.scene.add(mesh);
       const L = this.track.length;
       let s = (playerS + (dir > 0 ? 40 : 0) + offsetHint + this.r.range(0, 40));
       s = this.track.closed ? s % L : clamp(s, 10, L - 10);
       this.cars.push({
-        mesh, s, lane, dir,
+        mesh, s, lane, dir, wheels,
         speed: this.r.range(this.cfg.speedMin, this.cfg.speedMax) * (dir > 0 ? 1 : 0.92),
         t: proto.t, passed: false, cool: 0,
       });
@@ -108,6 +130,7 @@ window.S9 = window.S9 || {};
         const p = this.track.posAt(c.s, c.lane);
         c.mesh.position.copy(p);
         c.mesh.rotation.y = this.track.tangentYawAt(c.s) + (c.dir < 0 ? Math.PI : 0);
+        for (const w of c.wheels) w.rotation.x += c.speed * dt / 0.34; // rolling on the shared axle radius
 
         // near-miss: pass within a car width at high relative speed, no contact
         // (suppressed while the player is crashing/respawning)

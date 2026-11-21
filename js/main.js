@@ -97,8 +97,8 @@ window.S9 = window.S9 || {};
     scene.add(sun);
 
     const trackData = await loadTrackData();
-    const [tracksGltf, carsGltf, envTex, manifest] = await Promise.all([
-      loadGltf('tracks.glb'), loadGltf('cars.glb'), loadEnv(), loadManifest()]);
+    const [tracksGltf, carsGltf, trafficGltf, envTex, manifest] = await Promise.all([
+      loadGltf('tracks.glb'), loadGltf('cars.glb'), loadGltf('traffic.glb'), loadEnv(), loadManifest()]);
     const entry = trackData && trackData.tracks && (trackData.tracks.find(t => t.id === P.track) || trackData.tracks[0]);
 
     const track = new S9.Track(scene, P.seed, entry || null);
@@ -143,7 +143,7 @@ window.S9 = window.S9 || {};
     }
     window.__assetFlags = { glbCar: !!car.isGlb, glbTrack: !!track.hasGlbStatics, pano: !!envTex, data: !!entry };
 
-    const traffic = new S9.Traffic(scene, track, P.seed);
+    const traffic = new S9.Traffic(scene, track, P.seed, trafficGltf);
     traffic.spawnInitial(car.s);
     car.track.trafficRef = traffic; // bot lane checks
 
