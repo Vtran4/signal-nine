@@ -70,11 +70,11 @@ window.S9 = window.S9 || {};
   // Build a hero-car group from cars.glb. Modeler contract: flat node names
   // `<tok>_body/glass/hood/spoiler/lights_f/lights_r/bumper_f/bumper_r/wheel_fl|fr|rl|rr`,
   // paint material slots paint_<tok>. Works for flat or nested hierarchies.
-  S9.buildCarFromGltf = function (gltf, classId) {
+  S9.buildCarFromGltf = function (gltf, classId, paintOverride) {
     const tok = ({ street: 'street', perf: 'perf', super: 'super' })[classId] || 'street';
     const group = new THREE.Group();
     const wheels = [], front = [];
-    const paintColor = ({ street: 0xd8452e, perf: 0x2fb7a9, super: 0xf2f0e6 })[classId] || 0xcccccc;
+    const paintColor = paintOverride || ({ street: 0xd8452e, perf: 0x2fb7a9, super: 0xf2f0e6 })[classId] || 0xcccccc;
     for (const node of gltf.scene.children) {
       if (!node.name || !node.name.startsWith(tok + '_')) continue;
       const clone = node.clone(true);

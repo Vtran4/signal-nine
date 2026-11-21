@@ -23,6 +23,7 @@ window.S9 = window.S9 || {};
         chain: document.getElementById('chain'),
         bl: document.getElementById('hud-bl'),
         br: document.getElementById('hud-br'),
+        raceinfo: document.getElementById('raceinfo'),
         menu: document.getElementById('menu'),
         pause: document.getElementById('pause'),
         results: document.getElementById('results'),
@@ -85,6 +86,7 @@ window.S9 = window.S9 || {};
 
     // ---------- flow ----------
     startRun() {
+      this.cleanupRace();
       const car = this.car;
       car.s = 30; car.lateral = this.track.laneOffset; car.speed = 0;
       car.heading = this.track.tangentYawAt(30); car.slip = 0;
@@ -104,8 +106,45 @@ window.S9 = window.S9 || {};
       this.hud.br.style.display = 'block';
     }
 
+    startRace() {
+      this.cleanupRace();
+      const car = this.car;
+      car.s = 30; car.lateral = 1.8; car.speed = 0;
+      car.heading = this.track.tangentYawAt(30); car.slip = 0;
+      car.boost = { meter: 0, active: false, chain: 0, ease: 0 };
+      car.crashed = 0; car.invuln = 0;
+      car.stats = { nearMisses: 0, oncomingTime: 0, driftTime: 0, topMph: 0, burnouts: 0, crashes: 0 };
+      this.traffic.cars.length = 0;
+      this.traffic.spawnInitial(car.s);
+      this.runTime = 0;
+      this.mode = 'race';
+      this.paused = false;
+      this.race = new S9.Race(this, this.track.closed ? 3 : 1);
+      // rivals in glb blockouts with their own paint
+      if (this.assets && this.assets.carsGltf) {
+        for (let i = 0; i < this.race.rivals.length; i++) {
+          const r = this.race.rivals[i];
+          const spec = S9.RACE_RIVALS[i];
+          const old = r.mesh;
+          r.swapMesh(S9.buildCarFromGltf(this.assets.carsGltf, r.cfg.id, spec.paint));
+          this.scene.remove(old);
+          this.scene.add(r.mesh);
+        }
+      }
+      this.#snapCamera();
+      this.hud.menu.classList.remove('on');
+      this.hud.results.classList.remove('on');
+      this.hud.pause.classList.remove('on');
+      this.hud.bl.style.display = 'block';
+      this.hud.br.style.display = 'block';
+    }
+
+    cleanupRace() {
+      if (this.race) { this.race.dispose(); this.race = null; }
+    }
+
     toAttract() {
-      this.mode = 'attract';
+      this.cleanupRace();
       this.hud.bl.style.display = 'none';
       this.hud.br.style.display = 'none';
       this.hud.results.classList.remove('on');
@@ -113,6 +152,27 @@ window.S9 = window.S9 || {};
         ? `Best today: ${Math.round(this.best.topMph)} mph · ${this.best.burnouts} burnouts`
         : 'No run yet today';
       this.hud.menu.classList.add('on');
+    }
+
+    showRaceResults(pos, medal) {
+      // position + medal results, best-medal persistence per track
+      const ord = ['1ST', '2ND', '3RD', '4TH'][clamp(pos - 1, 0, 3)];
+      this.mode = 'results';
+      const s = this.car.stats;
+      document.getElementById('res-title').textContent = medal === '4TH' ? 'RACE COMPLETE' : medal + ' MEDAL';
+      document.getElementById('res-score').textContent = ord;
+      document.getElementById('res-detail').textContent =
+        `${s.burnouts} burnout${s.burnouts === 1 ? '' : 's'} · ${s.nearMisses} near-miss${s.nearMisses === 1 ? '' : 'es'} · ${Math.round(s.oncomingTime)}s oncoming · ${s.crashes} crash${s.crashes === 1 ? '' : 'es'}`;
+      const rank = clamp(pos, 1, 4);
+      try {
+        const raw = localStorage.getItem('s9_medals');
+        const medals = raw ? JSON.parse(raw) : {};
+        if (!medals[this.track.id] || rank < medals[this.track.id]) medals[this.track.id] = rank;
+        localStorage.setItem('s9_medals', JSON.stringify(medals));
+      } catch (e) { /* private mode */ }
+      this.hud.bl.style.display = 'none';
+      this.hud.br.style.display = 'none';
+      this.hud.results.classList.add('on');
     }
 
     showResults() {
@@ -146,50 +206,56 @@ window.S9 = window.S9 || {};
       const timeScale = this.physics.tickScale(dtRaw);
       const dt = dtRaw * timeScale;
 
-      if (this.mode === 'drive' && !this.paused) {
-        this.runTime += dt;
-        const input = this.bot ? this.bot.update(this.car, this.track, dt) : this.#humanInput();
-        this.lastInput = { throttle: Math.round(input.throttle * 100) / 100, brake: input.brake, steer: Math.round(input.steer * 100) / 100, boost: input.boost };
-        this.lastTarget = this.bot ? this.bot.lastTarget : null;
-        if (!this.traffic.onNearMiss) {
-          this.traffic.onNearMiss = (rel, heavy) => {
-            this.car.nmCalls = (this.car.nmCalls || 0) + 1;
-            (this.traffic.closeLog = this.traffic.closeLog || []).push({
-              HOOK: 1, carId: this.car._id, crashed: Math.round(this.car.crashed * 100) / 100,
-              mph: Math.round(this.car.speed * 2.23694),
-            });
-            this.car.addNearMiss(heavy);
-            this.audio.fire('nearmiss');
-            this.physics.slowMo(0.22, 0.4);
-            showEvent(heavy ? 'NEAR MISS — HEAVY' : 'NEAR MISS');
-          };
-        }
-        const ev = this.car.update(dt, input);
-        this.traffic.update(dt, this.car);
-        const hits = this.physics.resolve(this.car, this.traffic, dt);
-        for (const h of hits) {
-          if (h.type === 'crash') {
-            if (this.car.crash()) {
-              this.audio.fire('crash');
-              this.physics.slowMo(0.7, 0.3);
-              showEvent('CRASHED', true);
+      if ((this.mode === 'drive' || this.mode === 'race') && !this.paused) {
+        if (this.race) this.race.update(dt);
+        const frozen = this.race && this.race.state === 'countdown';
+        if (!frozen) {
+          this.runTime += dt;
+          const input = this.bot ? this.bot.update(this.car, this.track, dt) : this.#humanInput();
+          this.lastInput = { throttle: Math.round(input.throttle * 100) / 100, brake: input.brake, steer: Math.round(input.steer * 100) / 100, boost: input.boost };
+          this.lastTarget = this.bot ? this.bot.lastTarget : null;
+          if (!this.traffic.onNearMiss) {
+            this.traffic.onNearMiss = (rel, heavy) => {
+              this.car.nmCalls = (this.car.nmCalls || 0) + 1;
+              (this.traffic.closeLog = this.traffic.closeLog || []).push({
+                HOOK: 1, carId: this.car._id, crashed: Math.round(this.car.crashed * 100) / 100,
+                mph: Math.round(this.car.speed * 2.23694),
+              });
+              this.car.addNearMiss(heavy);
+              this.audio.fire('nearmiss');
+              this.physics.slowMo(0.22, 0.4);
+              showEvent(heavy ? 'NEAR MISS — HEAVY' : 'NEAR MISS');
+            };
+          }
+          const ev = this.car.update(dt, input);
+          this.traffic.update(dt, this.car);
+          const hits = this.physics.resolve(this.car, this.traffic, dt);
+          if (this.race) {
+            const rhits = this.physics.resolveRivals(this.car, this.race.rivals, dt);
+            for (const h of rhits) if (h.type === 'graze') this.audio.fire('wall');
+            for (const r of this.race.rivals) {
+              const rin = r.bot.update(r, this.track, dt);
+              r.update(dt, rin);
             }
-          } else if (h.type === 'graze') {
-            this.audio.fire('wall');
           }
-        }
-        if (ev === 'nearmiss' || this.traffic.events.some(e => e.type === 'nearmiss')) {
-          for (const e of this.traffic.events) if (e.type === 'nearmiss') {
-            this.car.addNearMiss(e.heavy);
-            this.audio.fire('nearmiss');
-            this.physics.slowMo(0.22, 0.4);
-            showEvent(e.heavy ? 'NEAR MISS — HEAVY' : 'NEAR MISS');
+          for (const h of hits) {
+            if (h.type === 'crash') {
+              if (this.car.crash()) {
+                this.audio.fire('crash');
+                this.physics.slowMo(0.7, 0.3);
+                showEvent('CRASHED', true);
+              }
+            } else if (h.type === 'graze') {
+              this.audio.fire('wall');
+            }
           }
+          if (ev === 'wall') this.audio.fire('wall');
+          if (ev === 'boost_start') showEvent('BOOST');
+          if (ev === 'burnout') { this.audio.fire('burnout'); showEvent('BURNOUT ×' + (this.car.boost.chain + 1), true); }
+          this.#updateCamera(dt);
+        } else {
+          this.#updateCamera(dt);
         }
-        if (ev === 'wall') this.audio.fire('wall');
-        if (ev === 'boost_start') showEvent('BOOST');
-        if (ev === 'burnout') { this.audio.fire('burnout'); showEvent('BURNOUT ×' + (this.car.boost.chain + 1), true); }
-        this.#updateCamera(dt);
       } else if (this.mode === 'attract') {
         this.#attractCamera(dtRaw);
       }
@@ -287,13 +353,20 @@ window.S9 = window.S9 || {};
     }
 
     #updateHud() {
-      if (this.mode !== 'drive') return;
+      if (this.mode !== 'drive' && this.mode !== 'race') return;
       this.hud.speed.innerHTML = fmtMph(this.car.speed) + '<small>MPH</small>';
       const b = this.car.boost;
       this.hud.bar.style.width = (b.meter * 100).toFixed(1) + '%';
       this.hud.bar.classList.toggle('burn', b.active);
       if (b.chain > 0 && b.active) { this.hud.chain.style.display = 'block'; this.hud.chain.textContent = 'BURNOUT ×' + (b.chain + 1); }
       else this.hud.chain.style.display = 'none';
+      // race position/lap line
+      if (this.mode === 'race' && this.race) {
+        const r = this.race;
+        const lapTxt = this.track.closed ? `LAP ${Math.min(r.laps, r.lapCount[0] + 1)}/${r.laps} · ` : 'SPRINT · ';
+        const posTxt = r.state === 'countdown' ? 'GRID' : `POS ${r.playerPos}/4`;
+        this.hud.raceinfo.textContent = lapTxt + posTxt;
+      } else if (this.hud.raceinfo) this.hud.raceinfo.textContent = '';
     }
 
     // diagnostics: traffic table relative to the player (pw_run debugging)
@@ -317,6 +390,12 @@ window.S9 = window.S9 || {};
     }
 
     state() {
+      const race = this.race ? {
+        state: this.race.state,
+        lap: this.race.lapCount[0] + (this.track.closed ? 1 : 0),
+        laps: this.race.laps,
+        pos: this.race.playerPos,
+      } : null;
       return JSON.stringify({
         mode: this.mode,
         speedMph: fmtMph(this.car.speed),
@@ -324,6 +403,7 @@ window.S9 = window.S9 || {};
         boostActive: this.car.boost.active,
         chain: this.car.boost.chain,
         stats: this.car.stats,
+        race,
         dbg: {
           s: Math.round(this.car.s), lateral: Math.round(this.car.lateral * 10) / 10,
           slip: Math.round(this.car.slip * 100) / 100,

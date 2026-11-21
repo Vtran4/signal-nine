@@ -99,6 +99,32 @@ window.S9 = window.S9 || {};
       return events;
     }
 
+    // rival contact: graze-only shunts (rivals never crash the player in M1).
+    // Gates: closing speed > 3 m/s (side-by-side drafting is NOT contact) and a
+    // shared cooldown — without them overlapping rivals scrub the player to a
+    // dead stop frame by frame.
+    resolveRivals(car, rivals, dt) {
+      const events = [];
+      if (car.crashed > 0 || car.invuln > 0) return events;
+      this.rivalGrazeCool = Math.max(0, (this.rivalGrazeCool || 0) - dt);
+      const L = car.track.length;
+      for (const r of rivals) {
+        if (r.crashed > 0 || r.invuln > 0) continue;
+        let ds = r.s - car.s;
+        if (car.track.closed) { ds %= L; if (ds > L / 2) ds -= L; if (ds < -L / 2) ds += L; }
+        const latGap = r.lateral - car.lateral;
+        const closing = Math.abs(car.speed - r.speed);
+        if (Math.abs(ds) < 4.2 && Math.abs(latGap) < 1.8 && closing > 3 && this.rivalGrazeCool <= 0) {
+          this.rivalGrazeCool = 0.5;
+          this.sparks.burst(car.mesh.position, 6, 3);
+          car.graze(Math.sign(latGap) || 1);
+          r.graze(-Math.sign(latGap) || 1);
+          events.push({ type: 'graze' });
+        }
+      }
+      return events;
+    }
+
     update(dt, car) {
       this.sparks.update(dt);
     }
