@@ -18,6 +18,7 @@ window.S9 = window.S9 || {};
       accel: 9.0, brake: 16, engineBrake: 2.2,
       steerRate: 1.9, grip: 6.0, driftGrip: 2.6, driftYaw: 1.15,
       mass: 1240, paint: 0xd8452e, paintName: 'Signal Red', flake: 0.35,
+      wheelbase: 2.45, trackWidth: 1.56, rideHeight: 0.12, // modeler blockout measurements
     },
     {
       id: 'perf', name: 'KESTREL MR', cls: 'Performance', clsName: 'KESTREL MR',
@@ -26,6 +27,7 @@ window.S9 = window.S9 || {};
       accel: 10.5, brake: 17, engineBrake: 2.4,
       steerRate: 2.25, grip: 7.0, driftGrip: 2.9, driftYaw: 1.3,
       mass: 1150, paint: 0x2fb7a9, paintName: 'Kestrel Teal', flake: 0.5,
+      wheelbase: 2.60, trackWidth: 1.64, rideHeight: 0.10,
     },
     {
       id: 'super', name: 'APEX GT1', cls: 'Super', clsName: 'APEX GT1',
@@ -34,6 +36,7 @@ window.S9 = window.S9 || {};
       accel: 12.5, brake: 18, engineBrake: 2.6,
       steerRate: 2.4, grip: 8.0, driftGrip: 3.2, driftYaw: 1.4,
       mass: 1080, paint: 0xf2f0e6, paintName: 'Apex White', flake: 0.65,
+      wheelbase: 2.72, trackWidth: 1.66, rideHeight: 0.09,
     },
   ];
 

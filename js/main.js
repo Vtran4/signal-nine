@@ -6,6 +6,53 @@ window.S9 = window.S9 || {};
 
   function boot() {
     window.__boots = (window.__boots || 0) + 1;
+    bootAsync().catch((e) => {
+      window.__errors.push({ m: 'boot: ' + (e && e.message || e), s: 'main.js', l: 0, c: 0, st: e && e.stack ? String(e.stack).slice(0, 200) : '' });
+      document.getElementById('boot').textContent = 'BOOT FAILED — see console';
+    });
+  }
+
+  function fromB64(name) {
+    const A = window.__S9_ASSETS;
+    if (!A || !A[name]) return null;
+    const bin = atob(A[name].split(',')[1]);
+    const buf = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+    return buf;
+  }
+
+  async function loadTrackData() {
+    const buf = fromB64('tracks_data.json');
+    if (buf) return JSON.parse(new TextDecoder().decode(buf));
+    try {
+      const r = await fetch('assets/tracks_data.json');
+      if (r.ok) return await r.json();
+    } catch (e) { /* file:// without embed — fall back to procedural */ }
+    return null;
+  }
+
+  function loadGltf(name) {
+    return new Promise((res) => {
+      const buf = fromB64(name);
+      const loader = new THREE.GLTFLoader();
+      const done = (g) => res(g || null);
+      if (buf) loader.parse(buf.buffer, '', done, () => res(null));
+      else loader.load('assets/' + name, done, undefined, () => res(null));
+    });
+  }
+
+  async function loadEnv() {
+    const A = window.__S9_ASSETS;
+    const src = (A && A['env_coast.jpg']) ? A['env_coast.jpg'] : 'assets/env_coast.jpg';
+    try {
+      const tex = await new THREE.TextureLoader().loadAsync(src);
+      tex.mapping = THREE.EquirectangularReflectionMapping;
+      tex.colorSpace = THREE.SRGBColorSpace;
+      return tex;
+    } catch (e) { return null; }
+  }
+
+  async function bootAsync() {
     const canvas = document.getElementById('c');
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
     const baseDpr = Math.min(devicePixelRatio || 1, 2);
@@ -26,10 +73,40 @@ window.S9 = window.S9 || {};
     sun.position.set(280, 380, 160);
     scene.add(sun);
 
-    const track = new S9.Track(scene, P.seed);
+    const trackData = await loadTrackData();
+    const [tracksGltf, carsGltf, envTex] = await Promise.all([loadGltf('tracks.glb'), loadGltf('cars.glb'), loadEnv()]);
+    const entry = trackData && trackData.tracks && trackData.tracks[0];
+
+    const track = new S9.Track(scene, P.seed, entry || null);
+    if (entry && tracksGltf) {
+      track.hasGlbStatics = true;
+      scene.add(tracksGltf.scene);
+      track.oncomingEdge = track.laneDodge + 0.3;
+    } else if (entry) {
+      track.oncomingEdge = track.laneDodge + 0.3;
+      track.buildProceduralMeshes(P.seed); // glb missing — greybox under-layer
+    } else {
+      track.oncomingEdge = -1.2;
+    }
+    if (envTex) {
+      const pmrem = new THREE.PMREMGenerator(renderer);
+      scene.environment = pmrem.fromEquirectangular(envTex).texture;
+      scene.background = envTex;
+      scene.backgroundIntensity = 1.75; // early pano reads near-black through ACES — lift it
+      if (track.sky) track.sky.visible = false; // pano replaces the gradient dome
+    }
+
     const carCfg = S9.CARS.find(c => c.id === P.car) || S9.CARS[0];
     const car = new S9.Car(track, carCfg);
     scene.add(car.mesh);
+    if (carsGltf) {
+      const old = car.mesh;
+      car.swapMesh(S9.buildCarFromGltf(carsGltf, carCfg.id));
+      scene.remove(old);
+      scene.add(car.mesh);
+      car.isGlb = true;
+    }
+    window.__assetFlags = { glbCar: !!car.isGlb, glbTrack: !!track.hasGlbStatics, pano: !!envTex, data: !!entry };
 
     const traffic = new S9.Traffic(scene, track, P.seed);
     traffic.spawnInitial(car.s);

@@ -36,7 +36,8 @@ window.S9 = window.S9 || {};
     update(car, track, dt) {
       const speed = car.speed;
       const traffic = car.track.trafficRef;
-      const laneR = track.laneOffset, laneL = -track.laneOffset;
+      const laneR = track.laneOffset, laneL = (track.laneDodge !== undefined ? track.laneDodge : -track.laneOffset);
+      const squeeze = track.laneSqueeze !== undefined ? track.laneSqueeze : -0.7;
       const L = track.length;
       const wrap = (d) => { d = d % L; if (d > L / 2) d -= L; if (d < -L / 2) d += L; return d; };
 
@@ -65,8 +66,8 @@ window.S9 = window.S9 || {};
       if (this.passing) {
         // bail out of a squeeze if an oncoming is about to arrive head-on
         if (!this.passDeep && Lft.minOppT < 1.2) target = laneR;
-        else target = this.passDeep ? laneL : -0.7;
-      } else if (car.lateral < -0.9) {
+        else target = this.passDeep ? laneL : squeeze;
+      } else if (car.lateral < laneL + 0.3) {
         // committed to the oncoming run until the right lane is truly clear
         target = (R.minSame > 45 && R.minOppT > dodgeT) ? laneR : laneL;
       }

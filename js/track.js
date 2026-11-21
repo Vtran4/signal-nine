@@ -6,18 +6,60 @@ window.S9 = window.S9 || {};
   const { clamp, lerp, rng } = S9.util;
 
   class Track {
-    constructor(scene, seed) {
+    constructor(scene, seed, data) {
       this.scene = scene;
       this.spacing = S9.CFG.track.spacing;   // 2m — matches modeler contract
       this.halfW = S9.CFG.track.halfW;
       this.laneOffset = S9.CFG.track.laneOffset;
       this.closed = true;                    // coastal circuit = closed loop
 
-      this.#buildSpline();
-      this.#buildRoad();
-      this.#buildRails();
-      this.#buildSurrounds(seed);
+      if (data) {
+        this.#buildFromData(data);           // real spline from tracks_data.json
+        this.hasGlbStatics = false;          // main.js flips this when tracks.glb lands
+      } else {
+        this.#buildSpline();
+        this.#buildRoad();
+        this.#buildRails();
+        this.#buildSurrounds(seed);
+      }
       this.#buildSky();
+    }
+
+    // --- consume modeler-s9's tracks_data.json entry ---
+    // Sign convention: their laterals are LEFT-of-travel positive; ours are
+    // RIGHT-of-tangent positive — negate at load. With-traffic lanes land on
+    // our positive side (+1.2/+3.6), oncoming on negative (-1.2/-3.6).
+    #buildFromData(entry) {
+      const pts = entry.centerline;
+      const N = pts.length;
+      this.count = N;
+      this.length = N * this.spacing;
+      this.closed = !!entry.closed;
+      this.px = new Float32Array(N); this.py = new Float32Array(N); this.pz = new Float32Array(N);
+      this.tx = new Float32Array(N); this.tz = new Float32Array(N);
+      this.yaw = new Float32Array(N);
+      for (let n = 0; n < N; n++) {
+        this.px[n] = pts[n][0]; this.py[n] = pts[n][1]; this.pz[n] = pts[n][2];
+      }
+      for (let n = 0; n < N; n++) {
+        const a = (n - 1 + N) % N, b = (n + 1) % N;
+        const dx = this.px[b] - this.px[a], dz = this.pz[b] - this.pz[a];
+        const l = Math.hypot(dx, dz) || 1;
+        this.tx[n] = dx / l; this.tz[n] = dz / l;
+        this.yaw[n] = Math.atan2(this.tx[n], this.tz[n]);
+      }
+      if (entry.roadWidth) this.halfW = entry.roadWidth / 2;
+      // lanes, negated into our right-positive convention
+      const mine = (entry.lanes || [-3.6, -1.2, 1.2, 3.6]).map(l => -l).sort((a, b) => a - b);
+      this.lanesWith = mine.filter(l => l > 0);   // [1.2, 3.6] inner→outer
+      this.lanesOpp = mine.filter(l => l < 0);    // [-3.6, -1.2]
+      this.laneOffset = this.lanesWith[this.lanesWith.length - 1];  // traffic rides outer
+      this.laneOncoming = this.lanesOpp[0];       // traffic oncoming = outer
+      this.laneDodge = this.lanesOpp[this.lanesOpp.length - 1];     // bot dodge = inner oncoming
+      this.laneSqueeze = 0.5;                     // squeeze-pass line between lanes
+      this.furniture = entry.furniture || [];
+      this.junctions = entry.junctions || [];
+      this.name = entry.name || 'track';
     }
 
     // --- dense closed loop, resampled to exact 2m arc-length spacing ---
@@ -113,7 +155,14 @@ window.S9 = window.S9 || {};
       return { s: s0 + along, lateral: side, tangentYaw: yawv, index: best };
     }
 
-    // --- road ribbon with skirts, canvas asphalt texture ---
+    // fallback meshes when tracks.glb is unavailable (greybox under-layer)
+    buildProceduralMeshes(seed) {
+      if (this._built) return;
+      this._built = true;
+      this.#buildRoad();
+      this.#buildRails();
+      this.#buildSurrounds(seed || 1234);
+    }
     #buildRoad() {
       const N = this.count, hw = this.halfW;
       const pos = [], uv = [], idx = [];

@@ -67,6 +67,35 @@ window.S9 = window.S9 || {};
     return g;
   }
 
+  // Build a hero-car group from cars.glb. Modeler contract: flat node names
+  // `<tok>_body/glass/hood/spoiler/lights_f/lights_r/bumper_f/bumper_r/wheel_fl|fr|rl|rr`,
+  // paint material slots paint_<tok>. Works for flat or nested hierarchies.
+  S9.buildCarFromGltf = function (gltf, classId) {
+    const tok = ({ street: 'street', perf: 'perf', super: 'super' })[classId] || 'street';
+    const group = new THREE.Group();
+    const wheels = [], front = [];
+    const paintColor = ({ street: 0xd8452e, perf: 0x2fb7a9, super: 0xf2f0e6 })[classId] || 0xcccccc;
+    for (const node of gltf.scene.children) {
+      if (!node.name || !node.name.startsWith(tok + '_')) continue;
+      const clone = node.clone(true);
+      clone.traverse((o) => {
+        if (!/wheel/.test(o.name || '')) return;
+        o.rotation.order = 'YXZ';           // steer (Y) then roll (X)
+        wheels.push(o);
+        if (/_fl$|_fr$/.test(o.name)) front.push(o);
+      });
+      clone.traverse((o) => {
+        if (o.isMesh && o.material && o.material.name === 'paint_' + tok) {
+          o.material.color = new THREE.Color(paintColor);
+          o.material.metalness = 0.45; o.material.roughness = 0.34;
+          o.material.envMapIntensity = 1.0;
+        }
+      });
+      group.add(clone);
+    }
+    return { group, wheels, front };
+  };
+
   class Car {
     static _count = 0;
     constructor(track, cfg) {
@@ -93,7 +122,10 @@ window.S9 = window.S9 || {};
       // earners (danger only)
       let earn = 0;
       if (this.drifting && this.speed > B.driftMinSpeed) { earn += B.earn.drift; this.stats.driftTime += dt; }
-      if (this.lateral < -1.2 && this.speed > B.oncomingMinSpeed && !this.crashed) {
+      // oncoming earn: sustained driving against traffic flow — edge derives from the
+      // track's dodge lane when the real spline data is loaded
+      const onEdge = this.track.oncomingEdge !== undefined ? this.track.oncomingEdge : -1.2;
+      if (this.lateral < onEdge && this.speed > B.oncomingMinSpeed && !this.crashed) {
         earn += B.earn.oncoming; this.stats.oncomingTime += dt;
       }
       if (this.air.up) earn += B.earn.air;
@@ -219,17 +251,25 @@ window.S9 = window.S9 || {};
       this.lateral += strength * 0.4; // shoved aside, keeps going
     }
 
+    // swap the procedural blockout for the cars.glb build (main.js re-parents)
+    swapMesh(build) {
+      this.mesh = build.group;
+      this.meshWheels = build.wheels;
+      this.meshFront = build.front || [];
+      this.place();
+    }
+
     place() {
       const p = this.track.posAt(this.s, this.lateral);
       this.mesh.position.copy(p);
       this.mesh.rotation.y = this.heading;
       this.mesh.rotation.z = -this.slip * 0.55;  // lean into the slide
-      const wheels = this.mesh.userData.wheels;
-      for (let i = 0; i < wheels.length; i++) {
-        wheels[i].rotation.x += this.speed * 0.06;
-        if (i < 2) wheels[i].rotation.y = this.steerVis * 0.42; // front pair — cylinder rotated: use y? set on group below
+      const wheels = this.meshWheels || this.mesh.userData.wheels || [];
+      const front = new Set(this.meshFront || []);
+      for (const w of wheels) {
+        w.rotation.x += this.speed * 0.06;
+        if (front.has(w)) w.rotation.y = this.steerVis * 0.42;
       }
-      // note: wheel cylinders were rotated at geometry level; steer via rotation.y works post-rotateZ
     }
   }
 

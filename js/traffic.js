@@ -61,7 +61,9 @@ window.S9 = window.S9 || {};
     #spawn(playerS, offsetHint) {
       const proto = this.r.pick(this.protos);
       const dir = this.r() < 0.65 ? 1 : -1;                   // coastal highway: mostly with-traffic
-      const lane = dir * this.track.laneOffset;               // oncoming occupies the left lane
+      // with-traffic rides the outer right lane; oncoming the outer left lane
+      const lane = dir > 0 ? this.track.laneOffset
+        : (this.track.laneOncoming !== undefined ? this.track.laneOncoming : -this.track.laneOffset);
       const mesh = proto.mesh.clone();
       this.scene.add(mesh);
       const L = this.track.length;
