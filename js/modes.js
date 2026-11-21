@@ -240,7 +240,7 @@ window.S9 = window.S9 || {};
         mesh.position.copy(pos);
         mesh.rotation.y = yaw;
         game.scene.add(mesh);
-        this.props.push({ type: spec.type, t, mesh, vel: new THREE.Vector3(), spin: 0, hit: false });
+        this.props.push({ type: spec.type, t, mesh, vel: new THREE.Vector3(), spin: 0, hit: false, cool: 0 });
       }
       S9.util.showEvent('CRASH JUNCTION ' + (junctionIdx + 1), true);
     }
@@ -277,24 +277,31 @@ window.S9 = window.S9 || {};
       }
       if (this.state === 'done') return;
 
-      // prop integration: drift, spin, decay
+      // prop integration: drift, spin, decay + sanity clamp (an ungated impulse
+      // chain once flung props 300m off the junction)
+      const blink = Math.sin(performance.now() / 1000 * 9) > 0 ? 2.4 : 0.1;
       for (const p of this.props) {
+        p.cool = Math.max(0, p.cool - dt);
+        if (p.lights) for (const m of p.lights) m.emissiveIntensity = m.emissiveIntensity > 0 ? blink : 0;
         if (p.vel.lengthSq() > 0.01) {
+          if (p.vel.length() > 18) p.vel.setLength(18);
           p.mesh.position.addScaledVector(p.vel, dt);
           p.mesh.rotation.y += p.spin * dt;
           p.vel.multiplyScalar(Math.max(0, 1 - dt * 2.2));
           p.spin *= Math.max(0, 1 - dt * 2.0);
         }
       }
-      // prop-vs-prop chain hits
+      // prop-vs-prop chain hits (cooldown-gated so overlaps don't pump velocity)
       for (let i = 0; i < this.props.length; i++) {
         const a = this.props[i];
         if (a.vel.lengthSq() < 4) continue;
         for (let j = 0; j < this.props.length; j++) {
           if (i === j) continue;
           const b = this.props[j];
+          if (b.cool > 0) continue;
           const d = a.mesh.position.distanceTo(b.mesh.position);
           if (d < (a.t.len + b.t.len) / 2 * 0.75) {
+            b.cool = 0.4;
             const push = a.vel.clone().multiplyScalar(0.55 * a.t.mass / b.t.mass);
             b.vel.add(push);
             b.spin += (Math.random() - 0.5) * 2;
@@ -307,15 +314,16 @@ window.S9 = window.S9 || {};
           }
         }
       }
-      // player contact vs props (world space)
+      // player contact vs props (world space, cooldown-gated per prop)
       if (this.player.speed > 3) {
         const pp = this.player.mesh.position;
         const fwd = new THREE.Vector3(Math.sin(this.player.heading), 0, Math.cos(this.player.heading));
         for (const pr of this.props) {
+          if (pr.cool > 0) continue;
           const d = pp.distanceTo(pr.mesh.position);
           const contactR = (2.2 + pr.t.len / 2 * 0.8);
           if (d < contactR) {
-            const closing = this.player.speed * (1 + pr.t.mass * 0.08);
+            pr.cool = 0.4;
             const push = fwd.clone().multiplyScalar(this.player.speed * 0.5 / pr.t.mass);
             pr.vel.add(push);
             pr.spin += (Math.random() - 0.5) * 1.6;
@@ -323,6 +331,15 @@ window.S9 = window.S9 || {};
             if (!pr.hit) {
               pr.hit = true;
               this.impacted = true;
+              // the crash ends the run: the car is wrecked and coasts —
+              // plowing on at speed re-shovels props 100m+ down the road
+              this.player.speed = Math.min(this.player.speed, 13);
+              // hazard flashers: hit vehicles blink their head/taillights —
+              // beacons that make the wreck field read in the dusk bake
+              pr.lights = [];
+              pr.mesh.traverse((o) => {
+                if (o.isMesh && o.material && /lights/.test(o.material.name || '')) pr.lights.push(o.material);
+              });
               if (!this.impactPoint) {
                 this.impactPoint = pr.mesh.position.clone();
                 this.cine = 2.2;           // crash cinematic on the first big hit

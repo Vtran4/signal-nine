@@ -312,6 +312,15 @@ window.S9 = window.S9 || {};
         this.car.update(dt, input);
         if (this.crash) this.crash.update(dt);
         this.#updateCamera(dt);
+      } else if (this.mode === 'results' && this.crash) {
+        // elevated establishing shot of the junction behind the results
+        // panel — the pileup IS the payoff shot
+        const ip = this.#crashCamPos();
+        if (ip) {
+          const t = performance.now() / 1000;
+          this.camera.position.set(ip.x + Math.sin(t * 0.25) * 17, ip.y + 9.5, ip.z + Math.cos(t * 0.25) * 17);
+          this.camera.lookAt(ip.x, ip.y + 0.5, ip.z);
+        }
       } else if (this.mode === 'attract') {
         this.#attractCamera(dtRaw);
       }
@@ -337,10 +346,18 @@ window.S9 = window.S9 || {};
       this.camera.lookAt(p.clone().add(fwd.clone().multiplyScalar(C.lookAhead)).add(new THREE.Vector3(0, 0.8, 0)));
     }
 
+    #crashCamPos() {
+      // orbit target: the wrecked car's final position — it parks in the
+      // middle of its own wreck field, so the cluster frames with it.
+      // (Game's car is this.car; Crash owns the 'player' alias.)
+      return this.crash && this.car && this.car.mesh ? this.car.mesh.position.clone() : null;
+    }
+
     #updateCamera(dt) {
-      // crash cinematic: slow orbit around the first impact point
-      if (this.mode === 'crash' && this.crash && this.crash.cine > 0 && this.crash.impactPoint) {
-        const ip = this.crash.impactPoint;
+      // crash cinematic: slow orbit around the pileup
+      if (this.mode === 'crash' && this.crash && this.crash.cine > 0) {
+        const ip = this.#crashCamPos();
+        if (!ip) return;
         const t = performance.now() / 1000;
         this.camera.position.set(ip.x + Math.sin(t * 0.55) * 13, ip.y + 5.5, ip.z + Math.cos(t * 0.55) * 13);
         this.camera.lookAt(ip.x, ip.y + 0.9, ip.z);

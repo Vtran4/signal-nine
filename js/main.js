@@ -99,6 +99,14 @@ window.S9 = window.S9 || {};
     const trackData = await loadTrackData();
     const [tracksGltf, carsGltf, trafficGltf, envTex, manifest] = await Promise.all([
       loadGltf('tracks.glb'), loadGltf('cars.glb'), loadGltf('traffic.glb'), loadEnv(), loadManifest()]);
+    // slot tints for the dressing props (wood crates, metal racks/stacks) —
+    // the glb ships them unlit-flat; warm wood + steel reads weathered
+    for (const node of trafficGltf.scene.children) node.traverse((o) => {
+      const m = o.isMesh && o.material;
+      if (!m || !m.name) return;
+      if (m.name === 'wood') { m.color.set(0x8a6a42); m.roughness = 0.82; m.metalness = 0.0; }
+      if (m.name === 'metal') { m.color.set(0x9aa0a6); m.roughness = 0.38; m.metalness = 0.65; }
+    });
     const entry = trackData && trackData.tracks && (trackData.tracks.find(t => t.id === P.track) || trackData.tracks[0]);
 
     const track = new S9.Track(scene, P.seed, entry || null);
@@ -165,6 +173,7 @@ window.S9 = window.S9 || {};
       speedfx.render();
       document.getElementById('boot').style.display = 'none';
       window.__ready = true;
+      window.__g = game;   // debug handle: props, scene graph, camera
       window.__state = () => game.state();
       window.__dump = () => game.dumpTraffic();
       window.__closelog = () => game.traffic.closeLog || [];
@@ -212,6 +221,7 @@ window.S9 = window.S9 || {};
       frames++;
       if (!window.__ready && frames > 2) {
         window.__ready = true;
+        window.__g = game;   // debug handle: props, scene graph, camera
         document.getElementById('boot').style.display = 'none';
       }
     }
