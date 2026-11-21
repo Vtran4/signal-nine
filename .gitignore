@@ -1,0 +1,6 @@
+shots*/
+shots_*/
+__pycache__/
+*.pyc
+.DS_Store
+*.blend1

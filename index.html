@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Signal Nine — arcade street racer</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23172a3f'/%3E%3Cpath d='M2 11L8 3l6 8' stroke='%23ff8c42' stroke-width='2.2' fill='none'/%3E%3C/svg%3E">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #17263b; --cream: #f5efdf; --sun: #ff8c42; --teal: #2fb7a9;
+    --sky: #7ec8e3; --gold: #d9a441; --red: #e8483f;
+  }
+  html, body { margin: 0; padding: 0; overflow: hidden; background: #172a3f; width: 100%; height: 100%; }
+  #c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  .arcade { font-family: 'Anton', 'Barlow Condensed', 'Arial Narrow', sans-serif; }
+  .cond { font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; }
+
+  .hud { position: fixed; top: 14px; left: 16px; color: var(--cream); z-index: 5; user-select: none; }
+  .hud h1 { font-size: 19px; margin: 0; letter-spacing: .1em; text-shadow: 2px 2px 0 rgba(23,38,59,.85); }
+  .hud p { font-size: 12px; margin: 3px 0 0; opacity: .8; font-family: 'Barlow Condensed', sans-serif; letter-spacing: .04em; }
+
+  #snd { position: fixed; top: 12px; right: 14px; z-index: 6; user-select: none;
+         font-family: 'Anton', sans-serif; font-size: 13px; letter-spacing: .06em;
+         color: var(--cream); background: #1d3450; border: 2px solid var(--teal); border-radius: 2px;
+         padding: 7px 13px; cursor: pointer; box-shadow: 0 0 12px rgba(47,183,169,.35); }
+  #snd:hover { background: #26456a; }
+
+  /* ---- driving HUD ---- */
+  #hud-bl { position: fixed; left: 20px; bottom: 16px; z-index: 5; display: none; color: var(--cream);
+            text-shadow: 2px 2px 0 rgba(23,38,59,.85); user-select: none; }
+  #speed { font-family: 'Anton', sans-serif; font-size: 46px; line-height: 1; }
+  #speed small { font-size: 16px; opacity: .85; margin-left: 4px; letter-spacing: .08em; }
+  #boostwrap { margin-top: 7px; width: 190px; }
+  #boostwrap .lbl { font-family: 'Barlow Condensed', sans-serif; font-size: 12px; letter-spacing: .22em; opacity: .9; }
+  #boostbar-out { display: block; width: 190px; height: 14px; border: 2px solid var(--ink);
+                  background: rgba(23,38,59,.55); box-shadow: 2px 2px 0 rgba(23,38,59,.6); margin-top: 2px; }
+  #boostbar { display: block; height: 100%; width: 0%;
+              background: linear-gradient(90deg, #ff8c42, #ffd23e); transition: width .06s linear; }
+  #boostbar.burn { background: linear-gradient(90deg, #ff5d3a, #ffd23e, #fff3b0); }
+  #chain { font-family: 'Anton', sans-serif; font-size: 18px; color: #ffd23e; margin-top: 4px; display: none; }
+
+  #hud-br { position: fixed; right: 20px; bottom: 16px; z-index: 5; display: none; text-align: right;
+            color: var(--cream); text-shadow: 2px 2px 0 rgba(23,38,59,.85); user-select: none;
+            font-family: 'Anton', sans-serif; }
+  #carname { font-size: 15px; letter-spacing: .1em; opacity: .9; }
+  #event { font-family: 'Anton', sans-serif; position: fixed; top: 26%; left: 50%; transform: translateX(-50%);
+           z-index: 5; display: none; pointer-events: none; font-size: 34px; color: #ffd23e;
+           -webkit-text-stroke: 1.5px var(--ink); text-shadow: 3px 3px 0 rgba(23,38,59,.8);
+           transform: translateX(-50%) rotate(-2deg); }
+  #event.pop { display: block; animation: evpop .8s ease-out forwards; }
+  @keyframes evpop {
+    0% { opacity: 0; transform: translateX(-50%) rotate(-2deg) scale(.4); }
+    14% { opacity: 1; transform: translateX(-50%) rotate(-2deg) scale(1.2); }
+    28% { transform: translateX(-50%) rotate(-2deg) scale(1); }
+    74% { opacity: 1; }
+    100% { opacity: 0; transform: translateX(-50%) rotate(-2deg) scale(1.02) translateY(-18px); }
+  }
+
+  /* ---- panels ---- */
+  .panel { position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+           flex-direction: column; z-index: 8; background: rgba(13, 24, 38, 0.45); user-select: none; }
+  .panel.on { display: flex; }
+  .panel .card { background: var(--cream); color: var(--ink); border: 4px solid var(--ink);
+                 border-radius: 2px; padding: 34px 58px; text-align: center;
+                 box-shadow: 10px 10px 0 rgba(23,38,59,.75); }
+  .panel h2 { font-family: 'Anton', sans-serif; color: var(--ink); font-size: 40px;
+              margin: 0 0 4px; letter-spacing: .05em; }
+  .panel .sub { color: #4a5568; font-size: 14px; margin: 0 0 20px; font-family: 'Barlow Condensed', sans-serif; }
+  .panel button { display: block; width: 260px; margin: 10px auto; padding: 11px 0;
+                  font-family: 'Anton', sans-serif; font-size: 16px; letter-spacing: .07em;
+                  color: var(--cream); background: var(--ink); border: 2px solid var(--ink);
+                  border-radius: 2px; cursor: pointer; }
+  .panel button:hover { background: var(--sun); border-color: var(--ink); color: var(--ink); }
+  #menu-art { width: 320px; height: 10px; margin: 0 auto 18px;
+              background: linear-gradient(90deg, var(--sky), var(--sun) 60%, var(--gold)); }
+
+  #boot { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+          color: #9fc4d8; font-family: 'Anton', sans-serif; font-size: 16px; letter-spacing: .14em; z-index: 4; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div class="hud arcade"><h1>SIGNAL NINE</h1><p id="hint">W/UP throttle &middot; S/DOWN brake &middot; A/D steer &middot; SHIFT boost &middot; SPACE drift &middot; R restart &middot; ESC pause</p></div>
+<button id="snd">Enable sound</button>
+
+<div id="hud-bl">
+  <div id="speed">0<small>MPH</small></div>
+  <div id="boostwrap">
+    <div class="lbl">BOOST</div>
+    <span id="boostbar-out"><i id="boostbar"></i></span>
+    <div id="chain">BURNOUT &times;2</div>
+  </div>
+</div>
+<div id="hud-br"><div id="carname">VANTORO RS</div></div>
+<div id="event">NEAR MISS</div>
+
+<div id="menu" class="panel on">
+  <div class="card">
+    <h2>SIGNAL NINE</h2>
+    <div id="menu-art"></div>
+    <p class="sub">arcade street racer &mdash; speed is earned by danger</p>
+    <button id="btn-play">Start run</button>
+    <p class="sub" id="menu-best">No run yet today</p>
+  </div>
+</div>
+<div id="pause" class="panel">
+  <div class="card">
+    <h2>PAUSED</h2>
+    <p class="sub">the coast holds its breath</p>
+    <button id="btn-resume">Resume</button>
+    <button id="btn-restart">Restart run</button>
+    <button id="btn-quit">Quit to main screen</button>
+  </div>
+</div>
+<div id="results" class="panel">
+  <div class="card">
+    <h2 id="res-title">RUN COMPLETE</h2>
+    <p class="sub" id="res-sub">best of the day</p>
+    <h2 id="res-score" style="font-size:52px">0</h2>
+    <p class="sub" id="res-detail">&nbsp;</p>
+    <p class="sub">Click anywhere to continue</p>
+  </div>
+</div>
+
+<div id="boot">ROLLING OUT&hellip;</div>
+<script>
+  // error collector — installed before any script runs
+  window.__errors = [];
+  window.onerror = function (msg, src, line, col, err) {
+    window.__errors.push({ m: String(msg), s: String(src).split('/').pop(), l: line, c: col,
+                           st: err && err.stack ? String(err.stack).split('\n').slice(0, 4).join(' | ') : '' });
+  };
+  window.addEventListener('unhandledrejection', function (e) {
+    window.__errors.push({ m: 'unhandledrejection: ' + String(e.reason), s: '', l: 0, c: 0, st: '' });
+  });
+</script>
+<script src="vendor/three.bundle.js"></script>
+<script src="js/config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/speedfx.js"></script>
+<script src="js/track.js"></script>
+<script src="js/traffic.js"></script>
+<script src="js/cars.js"></script>
+<script src="js/physics.js"></script>
+<script src="js/modes.js"></script>
+<script src="js/game.js"></script>
+<script src="js/bot.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

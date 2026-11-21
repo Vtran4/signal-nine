@@ -1,0 +1,96 @@
+{
+  "generated_by": "build_cars.py (blockout)",
+  "units": "meters",
+  "note": "Blockout massing, final node/material naming. Car forward = glTF +Z after export.",
+  "materials": [
+    "paint_street",
+    "paint_perf",
+    "paint_super",
+    "glass",
+    "lights",
+    "tire"
+  ],
+  "cars": [
+    {
+      "token": "street",
+      "display_name": "Vantoro RS",
+      "tri_count": 428,
+      "dims": {
+        "length": 4.3,
+        "width": 1.85,
+        "height": 1.22
+      },
+      "wheelbase": 2.45,
+      "track": 1.56,
+      "wheel_radius": 0.33,
+      "nodes": [
+        "street_body",
+        "street_bumper_f",
+        "street_bumper_r",
+        "street_glass",
+        "street_hood",
+        "street_lights_f",
+        "street_lights_r",
+        "street_spoiler",
+        "street_wheel_fl",
+        "street_wheel_fr",
+        "street_wheel_rl",
+        "street_wheel_rr"
+      ]
+    },
+    {
+      "token": "perf",
+      "display_name": "Kestrel MR",
+      "tri_count": 452,
+      "dims": {
+        "length": 4.4,
+        "width": 1.95,
+        "height": 1.15
+      },
+      "wheelbase": 2.6,
+      "track": 1.64,
+      "wheel_radius": 0.33,
+      "nodes": [
+        "perf_body",
+        "perf_bumper_f",
+        "perf_bumper_r",
+        "perf_glass",
+        "perf_hood",
+        "perf_lights_f",
+        "perf_lights_r",
+        "perf_spoiler",
+        "perf_wheel_fl",
+        "perf_wheel_fr",
+        "perf_wheel_rl",
+        "perf_wheel_rr"
+      ]
+    },
+    {
+      "token": "super",
+      "display_name": "Apex GT1",
+      "tri_count": 452,
+      "dims": {
+        "length": 4.6,
+        "width": 2.0,
+        "height": 1.1
+      },
+      "wheelbase": 2.72,
+      "track": 1.66,
+      "wheel_radius": 0.34,
+      "nodes": [
+        "super_body",
+        "super_bumper_f",
+        "super_bumper_r",
+        "super_glass",
+        "super_hood",
+        "super_lights_f",
+        "super_lights_r",
+        "super_spoiler",
+        "super_wheel_fl",
+        "super_wheel_fr",
+        "super_wheel_rl",
+        "super_wheel_rr"
+      ]
+    }
+  ]
+}
