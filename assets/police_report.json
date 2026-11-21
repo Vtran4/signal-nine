@@ -1,0 +1,51 @@
+{
+  "generated_by": "build_police.py",
+  "units": "meters",
+  "note": "Pursuit cruiser, finals fidelity, hero node contract. Forward = glTF +Z after export. Generic two-tone patrol coupe \u2014 no real-brand marks. New slots: paint_police_white, paint_police_black, lights_b.",
+  "materials": [
+    "paint_police_white",
+    "paint_police_black",
+    "glass",
+    "lights",
+    "lights_r",
+    "lights_b",
+    "tire",
+    "rim",
+    "dark",
+    "metal"
+  ],
+  "dims": {
+    "length": 5.1,
+    "width": 1.95,
+    "height": 1.45
+  },
+  "wheelbase": 2.95,
+  "track": 1.62,
+  "wheel_radius": 0.34,
+  "tri_count": 3816,
+  "nodes": [
+    "police_body",
+    "police_bumper_f",
+    "police_bumper_r",
+    "police_glass",
+    "police_hood",
+    "police_interior",
+    "police_lightbar",
+    "police_lightbar_blue",
+    "police_lightbar_red",
+    "police_lights_f",
+    "police_lights_r",
+    "police_pushbar",
+    "police_rim_fl",
+    "police_rim_fr",
+    "police_rim_rl",
+    "police_rim_rr",
+    "police_roof",
+    "police_spot",
+    "police_trunk",
+    "police_wheel_fl",
+    "police_wheel_fr",
+    "police_wheel_rl",
+    "police_wheel_rr"
+  ]
+}
