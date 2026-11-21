@@ -38,7 +38,11 @@ window.S9 = window.S9 || {};
         if (e.repeat) return;
         this.keys[e.code] = true;
         if (e.code === 'Escape') this.togglePause();
-        if (e.code === 'KeyR' && this.mode === 'drive') this.startRun();
+        if (e.code === 'KeyR') {
+          if (this.mode === 'race') this.startRace();
+          else if (this.mode === 'crash') this.startCrash(this.crash.idx);
+          else this.startRun();
+        }
       });
       addEventListener('keyup', (e) => { this.keys[e.code] = false; });
       const b = (id, fn) => document.getElementById(id).addEventListener('click', fn);
@@ -140,7 +144,9 @@ window.S9 = window.S9 || {};
     }
 
     cleanupRace() {
+      if (this.bot) this.bot.crashHold = undefined;
       if (this.race) { this.race.dispose(); this.race = null; }
+      if (this.crash) { this.crash.dispose(); this.crash = null; }
     }
 
     toAttract() {
@@ -152,6 +158,42 @@ window.S9 = window.S9 || {};
         ? `Best today: ${Math.round(this.best.topMph)} mph · ${this.best.burnouts} burnouts`
         : 'No run yet today';
       this.hud.menu.classList.add('on');
+    }
+
+    startCrash(idx) {
+      this.cleanupRace();
+      const car = this.car;
+      this.traffic.cars.length = 0;   // junction stage is the only traffic
+      this.runTime = 0;
+      this.mode = 'crash';
+      this.paused = false;
+      this.crash = new S9.Crash(this, idx);
+      this.#snapCamera();
+      this.hud.menu.classList.remove('on');
+      this.hud.results.classList.remove('on');
+      this.hud.pause.classList.remove('on');
+      this.hud.bl.style.display = 'block';
+      this.hud.br.style.display = 'block';
+      if (this.hud.raceinfo) this.hud.raceinfo.textContent = '';
+    }
+
+    showCrashResults(idx, total) {
+      this.mode = 'results';
+      const bestKey = 's9_crash_best';
+      let best = 0;
+      try {
+        const raw = localStorage.getItem(bestKey);
+        const all = raw ? JSON.parse(raw) : {};
+        best = all[idx] || 0;
+        if (total > best) { all[idx] = total; localStorage.setItem(bestKey, JSON.stringify(all)); best = total; }
+      } catch (e) { /* private mode */ }
+      document.getElementById('res-title').textContent = 'CRASH JUNCTION ' + (idx + 1);
+      document.getElementById('res-score').textContent = S9.util.fmtDollars(total);
+      document.getElementById('res-detail').textContent =
+        total >= best && total > 0 ? 'NEW JUNCTION RECORD' : 'junction best: ' + S9.util.fmtDollars(best);
+      this.hud.bl.style.display = 'none';
+      this.hud.br.style.display = 'none';
+      this.hud.results.classList.add('on');
     }
 
     showRaceResults(pos, medal) {
@@ -256,6 +298,20 @@ window.S9 = window.S9 || {};
         } else {
           this.#updateCamera(dt);
         }
+      } else if (this.mode === 'crash' && !this.paused) {
+        this.runTime += dt;
+        // bot: locked-lane launch via its stable curvature-FF controller;
+        // humans steer their own launch — that's the skill
+        let input;
+        if (this.bot) {
+          this.bot.crashHold = this.crash.launchLat;
+          input = this.bot.update(this.car, this.track, dt);
+        } else {
+          input = this.#humanInput();
+        }
+        this.car.update(dt, input);
+        if (this.crash) this.crash.update(dt);
+        this.#updateCamera(dt);
       } else if (this.mode === 'attract') {
         this.#attractCamera(dtRaw);
       }
@@ -282,6 +338,14 @@ window.S9 = window.S9 || {};
     }
 
     #updateCamera(dt) {
+      // crash cinematic: slow orbit around the first impact point
+      if (this.mode === 'crash' && this.crash && this.crash.cine > 0 && this.crash.impactPoint) {
+        const ip = this.crash.impactPoint;
+        const t = performance.now() / 1000;
+        this.camera.position.set(ip.x + Math.sin(t * 0.55) * 13, ip.y + 5.5, ip.z + Math.cos(t * 0.55) * 13);
+        this.camera.lookAt(ip.x, ip.y + 0.9, ip.z);
+        return;
+      }
       const car = this.car, C = S9.CFG.camera;
       const p = car.mesh.position;
       const fwd = new THREE.Vector3(Math.sin(car.heading), 0, Math.cos(car.heading));
@@ -404,6 +468,11 @@ window.S9 = window.S9 || {};
         chain: this.car.boost.chain,
         stats: this.car.stats,
         race,
+        crash: this.crash ? {
+          state: this.crash.state, total: Math.round(this.crash.total),
+          hits: this.crash.props.filter(p => p.hit).length,
+          props: this.crash.props.length, cine: Math.round(this.crash.cine * 10) / 10,
+        } : null,
         dbg: {
           s: Math.round(this.car.s), lateral: Math.round(this.car.lateral * 10) / 10,
           slip: Math.round(this.car.slip * 100) / 100,

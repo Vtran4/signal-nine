@@ -44,6 +44,19 @@ window.S9 = window.S9 || {};
         d = d % L; if (d > L / 2) d -= L; if (d < -L / 2) d += L; return d;
       };
 
+      // crash junction launch: lock the lane target and skip all scan/dodge
+      // logic — but keep the full curvature feedforward + PD. Plain PD alone
+      // cannot track curves at launch speed (slip ran to 1.49 rad = spinout).
+      if (this.crashHold !== undefined) {
+        const look = 12 + speed * 0.55;
+        const k = this.curvature(track, car.s, look * 0.35, look * 1.35);
+        const falloff = 1 / (1 + speed * 0.022);
+        const ff = clamp(k * speed / (car.cfg.steerRate * falloff), -1, 1);
+        const steer = clamp(ff - (this.crashHold - car.lateral) * 0.12 - car.slip * 1.6, -1, 1);
+        this.lastTarget = this.crashHold;
+        return { throttle: 1, brake: 0, steer, boost: false, drift: false };
+      }
+
       const R = this.#scan(traffic, car, laneR, speed);
       const Lft = this.#scan(traffic, car, laneL, speed);
 
