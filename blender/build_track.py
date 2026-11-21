@@ -772,6 +772,226 @@ def gantry_dt():
 gantry_dt()
 print("FURNITURE_DT:", len(furniture_dt))
 
+# =====================================================================
+# TRACK 3 — CANYON CIRCUIT (closed loop, switchback ladders, rim exposure)
+# =====================================================================
+CTRL_CN = [(0, -520, 10), (10, -300, 11), (-10, -140, 13), (30, -40, 15),
+           (-60, 40, 26), (-160, 100, 40), (-60, 170, 55), (30, 250, 70),
+           (-40, 340, 82), (-200, 400, 88), (-380, 380, 90), (-460, 260, 88),
+           (-420, 120, 82), (-500, 20, 70), (-420, -60, 56), (-520, -140, 44),
+           (-440, -240, 30), (-330, -320, 20), (-180, -420, 12), (-40, -480, 10)]
+
+S3 = resample_closed(dense_closed(CTRL_CN), SPACING)
+N3 = len(S3)
+TRACK_LEN_CN = N3 * SPACING
+T3, L3 = tangents_lefts(S3, True)
+print("TRACK canyon samples:", N3, "length_m:", round(TRACK_LEN_CN, 1))
+
+build_road_mesh("canyon_road", S3, L3, closed=True)
+build_road_paint("canyon_paint_w", "canyon_paint_y", S3, L3, True, None)
+
+furniture_cn = []
+RIM_LO, RIM_HI = 0.37, 0.62  # loop fractions where the OUTER side drops away
+
+def rim_weight(i):
+    frac = i / (N3 - 1)
+    return (smoothstep(RIM_LO - 0.04, RIM_LO + 0.01, frac)
+            * (1.0 - smoothstep(RIM_HI - 0.01, RIM_HI + 0.04, frac)))
+
+def cn_curvature(i):
+    a, b = T3[(i - 2) % N3], T3[(i + 2) % N3]
+    dot = max(-1.0, min(1.0, a[0] * b[0] + a[1] * b[1] + a[2] * b[2]))
+    return math.acos(dot) / (4 * SPACING)
+
+CN_TX0, CN_TX1, CN_TY0, CN_TY1 = -620.0, 140.0, -640.0, 520.0
+CN_CELL = 10.0
+CN_NX = int((CN_TX1 - CN_TX0) / CN_CELL)
+CN_NY = int((CN_TY1 - CN_TY0) / CN_CELL)
+cn_coarse = [(i, S3[i]) for i in range(0, N3, 8)]
+
+def cn_terrain_h(x, y):
+    """Gorge carve: corridor hugs the road; walls rise 45 m above LOCAL road
+    level; on the rim arc the outer (right) side drops into a basin instead."""
+    best, bz, gi = 1e9, 0.0, 0
+    for ki, p in cn_coarse:
+        d2 = (p[0] - x) ** 2 + (p[1] - y) ** 2
+        if d2 < best:
+            best, bz, gi = d2, p[2], ki
+    d = math.sqrt(best)
+    noise = (sin(x * 0.0031 + 2.1) * cos(y * 0.0027 + 0.4) * 4.0
+             + sin(x * 0.0061) * sin(y * 0.0053) * 2.0)
+    if d < 12.0:
+        w = 1.0 - smoothstep(6.0, 12.0, d)
+        return (bz - 0.6) * w + (bz - 0.6 + noise * 0.25) * (1.0 - w)
+    wall_h = bz - 0.6 + 45.0 * smoothstep(12.0, 55.0, d)
+    dw = rim_weight(gi)
+    if dw > 0.0:
+        p, t = S3[gi], T3[gi]
+        if cross_z(t, (x - p[0], y - p[1])) < 0.0:  # outer (right) = drop side
+            drop_h = bz - 0.6 - 35.0 * smoothstep(12.0, 60.0, d)
+            return (wall_h * (1.0 - dw) + drop_h * dw) + noise * 0.4
+    return wall_h + noise * 0.4
+
+def build_canyon_terrain():
+    verts = []
+    for iy in range(CN_NY + 1):
+        for ix in range(CN_NX + 1):
+            x = CN_TX0 + ix * CN_CELL
+            y = CN_TY0 + iy * CN_CELL
+            verts.append((x, y, cn_terrain_h(x, y)))
+    faces = []
+    def v(ix, iy):
+        return iy * (CN_NX + 1) + ix
+    for iy in range(CN_NY):
+        for ix in range(CN_NX):
+            faces.append((v(ix, iy), v(ix + 1, iy), v(ix + 1, iy + 1), v(ix, iy + 1)))
+    return mesh_from("canyon_terrain", verts, faces, MAT["terrain"])
+
+build_canyon_terrain()
+
+def cn_guard_runs():
+    guarded = set()
+    runs = []
+    zones, cur = [], []
+    for i in range(N3):
+        if cn_curvature(i) > 0.0045:
+            cur.append(i)
+        else:
+            if cur:
+                zones.append(cur)
+            cur = []
+    if cur:
+        zones.append(cur)
+    merged = []
+    for z in zones:
+        if merged and z[0] - merged[-1][-1] <= 3:
+            merged[-1].extend(z)
+        else:
+            merged.append(z)
+    for z in merged:
+        if len(z) >= 8:
+            cz = sum(cross_z(T3[(i - 1) % N3], T3[(i + 1) % N3]) for i in z)
+            runs.append((z, -6.0 if cz > 0 else 6.0))
+            guarded.update(z)
+    rim, allr = [], []
+    for i in range(N3):
+        if rim_weight(i) > 0.5 and i not in guarded:
+            rim.append(i)
+        else:
+            if len(rim) >= 8:
+                allr.append(rim)
+            rim = []
+    if len(rim) >= 8:
+        allr.append(rim)
+    for z in allr:
+        runs.append((z, -6.0))
+    counts = {"full": 0, "lod1": 0, "lod2": 0}
+    for z, outer in runs:
+        s0 = z[0] * SPACING
+        name = "props_cn_guard_" + pad(s0)
+        for lod, post_step in (("full", 2), ("lod1", 4), ("lod2", 99)):
+            verts, faces = [], []
+            idxs = z[::2] if lod != "full" else z
+            for i in idxs:
+                p, l = S3[i], L3[i]
+                bx, by = p[0] + l[0] * outer, p[1] + l[1] * outer
+                verts.extend([(bx, by, p[2] + 0.55), (bx, by, p[2] + 0.80)])
+            m = len(idxs)
+            for k in range(m - 1):
+                faces.append((2 * k, 2 * k + 2, 2 * k + 3, 2 * k + 1))
+            if lod != "lod2":
+                step = post_step * 2
+                for gi in range(z[0], z[-1] + 1, step):
+                    gi = min(gi, z[-1])
+                    p, l = S3[gi], L3[gi]
+                    add_box_verts(verts, faces, (0.14, 0.14, 0.62),
+                                  (p[0] + l[0] * outer, p[1] + l[1] * outer, p[2] + 0.31))
+            nm = name if lod == "full" else name + "_" + lod
+            mesh_from(nm, verts, faces, MAT["metal"])
+            counts[lod] += 1
+        furniture_cn.append({"type": "guard", "s": round(s0, 1),
+                             "lateral": round(outer, 2), "node": name})
+    print("GUARD_CN runs:", counts)
+
+def cn_signs():
+    peaks = []
+    for i in range(N3):
+        c = cn_curvature(i)
+        if c > 0.0065:
+            if peaks and i - peaks[-1][0] < 60:
+                if c > peaks[-1][1]:
+                    peaks[-1] = (i, c)
+            else:
+                peaks.append((i, c))
+    peaks.sort(key=lambda t: -t[1])
+    picked = []
+    for i, c in peaks:
+        if all(abs(i - j) > 60 for j in picked):
+            picked.append(i)
+        if len(picked) == 6:
+            break
+    picked.sort()
+    for i in picked:
+        c = cross_z(T3[(i - 1) % N3], T3[(i + 1) % N3])
+        outer = -7.8 if c > 0 else 7.8
+        p, l = S3[i], L3[i]
+        px, py = p[0] + l[0] * outer, p[1] + l[1] * outer
+        yaw = math.atan2(T3[i][1], T3[i][0])
+        name = "props_cn_sign_chevron_" + pad(i * SPACING)
+        verts, faces = [], []
+        add_box_verts(verts, faces, (0.12, 0.12, 2.2), (px, py, p[2] + 1.1))
+        add_box_verts(verts, faces, (1.9, 2.2, 0.08), (px, py, p[2] + 2.6), yaw + math.pi / 2)
+        mesh_from(name, verts, faces, MAT["white"])
+        furniture_cn.append({"type": "sign_chevron", "s": round(i * SPACING, 1),
+                             "lateral": round(outer, 2), "node": name})
+    print("SIGNS_CN:", len(picked))
+
+def gantry_cn():
+    p, l = S3[0], L3[0]
+    yaw = math.atan2(T3[0][1], T3[0][0])
+    verts, faces = [], []
+    for side in (-6.8, 6.8):
+        add_box_verts(verts, faces, (0.5, 0.5, 6.8),
+                      (p[0] + l[0] * side, p[1] + l[1] * side, p[2] + 3.4), yaw)
+    add_box_verts(verts, faces, (14.4, 0.45, 0.5), (p[0], p[1], p[2] + 6.9), yaw)
+    add_box_verts(verts, faces, (8.0, 0.15, 1.7), (p[0], p[1] - 0.4, p[2] + 5.7), yaw)
+    mesh_from("props_cn_gantry_start", verts, faces, MAT["metal"])
+    furniture_cn.append({"type": "gantry", "s": 0.0, "lateral": 0.0,
+                         "node": "props_cn_gantry_start"})
+
+def rocks_cn():
+    for r in range(20):
+        i = random.randrange(0, N3)
+        p, l = S3[i], L3[i]
+        side = random.choice((-1, 1))
+        lat = side * random.uniform(18.0, 46.0)
+        bx, by = p[0] + l[0] * lat, p[1] + l[1] * lat
+        try:
+            bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=1, radius=1.0,
+                                                  location=(0, 0, 0))
+            ob = bpy.context.selected_objects[0]
+        except Exception:
+            continue
+        me = ob.data
+        sc = random.uniform(1.8, 4.2)
+        for v in me.vertices:
+            v.co.x += random.uniform(-0.24, 0.24)
+            v.co.y += random.uniform(-0.24, 0.24)
+            v.co.z += random.uniform(-0.20, 0.34)
+        ob.name = "canyon_rock_" + f"{r:02d}"
+        me.name = ob.name
+        ob.location = (bx, by, cn_terrain_h(bx, by) - 1.0)
+        ob.scale = (sc * random.uniform(0.8, 1.2), sc, sc * random.uniform(0.7, 1.0))
+        me.materials.append(MAT["terrain"])
+        furniture_cn.append({"type": "rock", "s": round(i * SPACING, 1),
+                             "lateral": round(lat, 2), "node": ob.name})
+    print("ROCKS_CN:", sum(1 for f in furniture_cn if f["type"] == "rock"))
+
+cn_guard_runs()
+cn_signs()
+gantry_cn()
+rocks_cn()
+
 # ---------------- world + sun ----------------
 world = bpy.data.worlds.new("sky")
 world.use_nodes = True
@@ -807,12 +1027,16 @@ data = {"tracks": [
      "centerline": [to_gltf_axes(p) for p in S2],
      "roadWidth": 10.0, "lanes": [-3.6, -1.2, 1.2, 3.6],
      "furniture": furniture_dt, "junctions": junctions},
+    {"id": "canyon", "name": "Canyon Circuit", "closed": True,
+     "centerline": [to_gltf_axes(p) for p in S3],
+     "roadWidth": 10.0, "lanes": [-3.6, -1.2, 1.2, 3.6],
+     "furniture": furniture_cn, "junctions": []},
 ]}
 json_path = os.path.join(ASSETS, "tracks_data.json")
 with open(json_path, "w", encoding="utf-8") as fh:
     json.dump(data, fh)
 print("JSON_OK", json_path, "furniture:", len(coastal_furniture), "+",
-      len(furniture_dt), "junctions:", len(junctions))
+      len(furniture_dt), "+", len(furniture_cn), "junctions:", len(junctions))
 
 set_path = os.path.join(ASSETS, "set.blend")
 bpy.ops.wm.save_as_mainfile(filepath=set_path, compress=True)
@@ -916,8 +1140,13 @@ try:
              os.path.join(SHOTS, "track_dt_top.png"))
         shot("dt_start", (-220, -320, 8), (240, 40, 4), None,
              os.path.join(SHOTS, "track_dt_start.png"))
+        shot("cn_top", (-240, -60, 1050), (-240, -60, 0), 1750,
+             os.path.join(SHOTS, "track_cn_top.png"))
+        shot("cn_start", (80, -700, 16), (-20, -260, 14), None,
+             os.path.join(SHOTS, "track_cn_start.png"))
 except Exception as exc:
     print("SHOTS_SKIPPED:", exc)
 
 print("BUILD_DONE coastal_m:", round(TRACK_LEN_COASTAL, 1), "downtown_m:",
-      round(TRACK_LEN_DT, 1), "samples:", N, "+", N2)
+      round(TRACK_LEN_DT, 1), "canyon_m:", round(TRACK_LEN_CN, 1),
+      "samples:", N, "+", N2, "+", N3)
