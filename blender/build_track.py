@@ -1,10 +1,14 @@
-# Signal Nine — coastal circuit greybox generator (build_track.py)
+# Signal Nine — track set generator (build_track.py)
 # Headless: blender -b -P blender/build_track.py
-# Emits: assets/set.blend, assets/tracks.glb (preliminary), assets/tracks_data.json,
-#        assets/env_coast.jpg (early pano), blender/shots/track_top.png + track_start.png
-# Contract: centerline samples every 2 m, closed loop (no duplicated wrap sample),
-# furniture {type, s, lateral, node} with node = exact glb node name.
-# JSON/glb world space = glTF axes (y-up): json = (x, z_blender, -y_blender).
+# Track 1: coastal circuit (closed loop, 3.7 km) — verified layout preserved.
+# Track 2: downtown sprint (point-to-point, ~3.1 km) + 4 crash junctions
+#          {s, lateral, arm} + overpass deck + procedural city blocks.
+# Emits: assets/set.blend, assets/tracks.glb, assets/tracks_data.json,
+#        assets/env_coast.jpg (early pano), blender/shots/*.
+# Contract: centerline samples every 2 m (closed: no duplicated wrap sample;
+# open: exact ends included), furniture {type, s, lateral, node} with node =
+# exact glb node name, GLOBALLY unique across both tracks (downtown furniture
+# uses props_dt_* stems). JSON/glb world space = glTF axes (x, z_blender, -y).
 import bpy
 import bmesh
 import json
@@ -44,6 +48,9 @@ MAT = {
     "ocean":  pbr("ocean",  (0.05, 0.22, 0.45), 0.0, 0.25),
     "metal":  pbr("metal",  (0.65, 0.67, 0.70), 0.6, 0.45),
     "white":  pbr("white",  (0.85, 0.85, 0.82)),
+    "concrete": pbr("concrete", (0.55, 0.54, 0.52)),
+    "building": pbr("building", (0.50, 0.48, 0.46)),
+    "dark":   pbr("dark",   (0.10, 0.10, 0.12)),
 }
 
 # ---------------- mesh helpers ----------------
@@ -70,12 +77,38 @@ def smoothstep(a, b, x):
 def dist3(a, b):
     return math.sqrt((a[0]-b[0])**2 + (a[1]-b[1])**2 + (a[2]-b[2])**2)
 
-# ---------------- coastal spline (closed loop) ----------------
-CTRL = [(620, -420, 26), (640, -140, 28), (660, 140, 30), (620, 380, 32),
-        (480, 560, 36), (260, 620, 42), (0, 600, 46), (-240, 480, 50),
-        (-420, 300, 52), (-500, 80, 48), (-420, -100, 42), (-300, -260, 38),
-        (-140, -380, 34), (60, -460, 28), (280, -500, 24), (480, -480, 24)]
+def add_box_verts(verts, faces, dims, center, yaw=0.0):
+    dx, dy, dz = dims
+    cx, cy, cz = center
+    base = len(verts)
+    ca, sa = cos(yaw), sin(yaw)
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            for sz in (-1, 1):
+                lx, ly, lz = sx * dx / 2, sy * dy / 2, sz * dz / 2
+                verts.append((cx + lx * ca - ly * sa, cy + lx * sa + ly * ca, cz + lz))
+    for off, f in enumerate([(0, 1, 3, 2), (4, 5, 7, 6), (0, 4, 5, 1),
+                             (2, 3, 7, 6), (0, 2, 6, 4), (1, 3, 7, 5)]):
+        faces.append(tuple(vi + base for vi in f))
 
+def ring_prism(name, cx, cy, z0, z1, r, seg, mat):
+    verts, faces = [], []
+    for z in (z0, z1):
+        for k in range(seg):
+            a = 2 * math.pi * k / seg
+            verts.append((cx + r * sin(a), cy + r * cos(a), z))
+    top = list(range(seg)); bot = list(range(seg, 2 * seg))
+    for k in range(seg):
+        j = (k + 1) % seg
+        faces.append((top[k], top[j], bot[j], bot[k]))
+    faces.append(tuple(top))
+    faces.append(tuple(reversed(bot)))
+    return mesh_from(name, verts, faces, mat, (0, 0, 0))
+
+def pad(s):
+    return f"{int(round(s)):04d}"
+
+# ---------------- splines ----------------
 def catmull(p0, p1, p2, p3, t):
     t2, t3 = t * t, t * t * t
     return tuple(0.5 * ((2 * p1[i]) + (-p0[i] + p2[i]) * t
@@ -83,19 +116,33 @@ def catmull(p0, p1, p2, p3, t):
                         + (-p0[i] + 3 * p1[i] - 3 * p2[i] + p3[i]) * t3)
                  for i in range(3))
 
-dense = []
-n_ctrl = len(CTRL)
-STEPS = 160
-for i in range(n_ctrl):
-    p0, p1 = CTRL[(i - 1) % n_ctrl], CTRL[i]
-    p2, p3 = CTRL[(i + 1) % n_ctrl], CTRL[(i + 2) % n_ctrl]
-    for j in range(STEPS):
-        dense.append(catmull(p0, p1, p2, p3, j / STEPS))
+def dense_closed(CTRL, steps=160):
+    dense = []
+    n = len(CTRL)
+    for i in range(n):
+        p0, p1 = CTRL[(i - 1) % n], CTRL[i]
+        p2, p3 = CTRL[(i + 1) % n], CTRL[(i + 2) % n]
+        for j in range(steps):
+            dense.append(catmull(p0, p1, p2, p3, j / steps))
+    return dense
+
+def dense_open(CTRL, steps=160):
+    dense = []
+    n = len(CTRL)
+    for i in range(n - 1):
+        p0 = CTRL[max(i - 1, 0)]
+        p1 = CTRL[i]
+        p2 = CTRL[i + 1]
+        p3 = CTRL[min(i + 2, n - 1)]
+        for j in range(steps):
+            dense.append(catmull(p0, p1, p2, p3, j / steps))
+    dense.append(tuple(CTRL[-1]))
+    return dense
 
 SPACING = 2.0
+
 def resample_closed(points, spacing):
-    """Uniform arc-length samples over a CLOSED loop: n = round(total/spacing),
-    step = total/n — the wrap segment is exactly step too (no remainder seam)."""
+    """Uniform arc-length samples over a CLOSED loop: wrap segment == step."""
     n_pts = len(points)
     total = sum(dist3(points[i], points[(i + 1) % n_pts]) for i in range(n_pts))
     n = max(8, int(round(total / spacing)))
@@ -117,17 +164,39 @@ def resample_closed(points, spacing):
         out.append(tuple(a[c] + (b[c] - a[c]) * f for c in range(3)))
     return out
 
-S = resample_closed(dense, SPACING)
-N = len(S)
-TRACK_LEN = N * SPACING
-print("TRACK samples:", N, "length_m:", round(TRACK_LEN, 1))
+def resample_open(points, spacing):
+    """Uniform samples over an OPEN polyline; first/last are the exact ends."""
+    total = sum(dist3(points[i], points[i + 1]) for i in range(len(points) - 1))
+    n = max(2, int(round(total / spacing)))
+    step = total / n
+    out = []
+    idx, acc = 0, 0.0
+    for k in range(n + 1):
+        target = min(total, k * step)
+        while idx < len(points) - 2:
+            seg = dist3(points[idx], points[idx + 1])
+            if acc + seg >= target:
+                break
+            acc += seg
+            idx += 1
+        a = points[idx]
+        b = points[idx + 1]
+        seg = dist3(a, b) or 1e-9
+        f = max(0.0, min(1.0, (target - acc) / seg))
+        out.append(tuple(a[c] + (b[c] - a[c]) * f for c in range(3)))
+    out[-1] = tuple(points[-1])
+    return out
 
-def tangents_lefts(samples):
+def tangents_lefts(samples, closed):
     n = len(samples)
     tans, lefts = [], []
     for i in range(n):
-        a = samples[(i - 1) % n]
-        b = samples[(i + 1) % n]
+        if closed:
+            a = samples[(i - 1) % n]
+            b = samples[(i + 1) % n]
+        else:
+            a = samples[max(i - 1, 0)]
+            b = samples[min(i + 1, n - 1)]
         t = (b[0] - a[0], b[1] - a[1], b[2] - a[2])
         L = math.sqrt(t[0] ** 2 + t[1] ** 2 + t[2] ** 2) or 1.0
         t = (t[0] / L, t[1] / L, t[2] / L)
@@ -135,7 +204,55 @@ def tangents_lefts(samples):
         lefts.append((-t[1], t[0], 0.0))  # up x tangent (left-positive)
     return tans, lefts
 
-TAN, LEFT = tangents_lefts(S)
+def build_road_mesh(name, S, LEFT, closed):
+    """Road ribbon. Closed loops duplicate the seam ring so v stays continuous
+    across the wrap (and the wrap quad actually exists — no start-line gap)."""
+    n = len(S)
+    verts, uvs = [], []
+    for i, p in enumerate(S):
+        l = LEFT[i]
+        verts.append((p[0] + l[0] * HW, p[1] + l[1] * HW, p[2]))
+        uvs.append((0.0, i * SPACING / 20.0))
+    for i, p in enumerate(S):
+        l = LEFT[i]
+        verts.append((p[0] - l[0] * HW, p[1] - l[1] * HW, p[2]))
+        uvs.append((1.0, i * SPACING / 20.0))
+    if closed:
+        l0 = LEFT[0]
+        verts.append((S[0][0] + l0[0] * HW, S[0][1] + l0[1] * HW, S[0][2]))
+        uvs.append((0.0, n * SPACING / 20.0))
+        verts.append((S[0][0] - l0[0] * HW, S[0][1] - l0[1] * HW, S[0][2]))
+        uvs.append((1.0, n * SPACING / 20.0))
+    faces = []
+    for i in range(n if closed else n - 1):
+        j = (i + 1) % n if closed else i + 1
+        if closed and j == 0:
+            jL, jR = 2 * n, 2 * n + 1  # duplicated seam ring
+        else:
+            jL, jR = j, n + j
+        faces.append((i, n + i, jR, jL))
+    ob = mesh_from(name, verts, faces, MAT["road"])
+    uv = ob.data.uv_layers.new(name="UVMap")
+    for poly in ob.data.polygons:
+        for li in poly.loop_indices:
+            vi = ob.data.loops[li].vertex_index
+            uv.data[li].uv = uvs[vi]
+    return ob
+
+# =====================================================================
+# TRACK 1 — COASTAL CIRCUIT (verified layout; call order preserves RNG)
+# =====================================================================
+CTRL_COASTAL = [(620, -420, 26), (640, -140, 28), (660, 140, 30), (620, 380, 32),
+                (480, 560, 36), (260, 620, 42), (0, 600, 46), (-240, 480, 50),
+                (-420, 300, 52), (-500, 80, 48), (-420, -100, 42), (-300, -260, 38),
+                (-140, -380, 34), (60, -460, 28), (280, -500, 24), (480, -480, 24)]
+
+HW = 5.0  # roadWidth 10
+S = resample_closed(dense_closed(CTRL_COASTAL), SPACING)
+N = len(S)
+TRACK_LEN_COASTAL = N * SPACING
+TAN, LEFT = tangents_lefts(S, True)
+print("TRACK coastal samples:", N, "length_m:", round(TRACK_LEN_COASTAL, 1))
 
 def curvature(i):
     a, b = TAN[(i - 2) % N], TAN[(i + 2) % N]
@@ -145,39 +262,15 @@ def curvature(i):
 def cross_z(a, b):
     return a[0] * b[1] - a[1] * b[0]
 
-# ---------------- road ribbon ----------------
-HW = 5.0  # roadWidth 10
-def build_road():
-    verts, faces, uvs = [], [], []
-    for i, p in enumerate(S):
-        l = LEFT[i]
-        verts.append((p[0] + l[0] * HW, p[1] + l[1] * HW, p[2]))
-        uvs.append((0.0, i * SPACING / 20.0))
-    for i, p in enumerate(S):
-        l = LEFT[i]
-        verts.append((p[0] - l[0] * HW, p[1] - l[1] * HW, p[2]))
-        uvs.append((1.0, i * SPACING / 20.0))
-    for i in range(N - 1):
-        faces.append((i, N + i, N + i + 1, i + 1))
-    ob = mesh_from("coastal_road", verts, faces, MAT["road"])
-    uv = ob.data.uv_layers.new(name="UVMap")
-    for poly in ob.data.polygons:
-        for li in poly.loop_indices:
-            vi = ob.data.loops[li].vertex_index
-            uv.data[li].uv = uvs[vi]
-    return ob
+build_road_mesh("coastal_road", S, LEFT, closed=True)
 
-road = build_road()
-
-# ---------------- terrain (flattens under road, cliffs into ocean east) ----------------
 TX0, TX1, TY0, TY1 = -700.0, 800.0, -700.0, 860.0
 CELL = 15.0
 NX = int((TX1 - TX0) / CELL)
 NY = int((TY1 - TY0) / CELL)
 road_coarse = S[::8]
+
 def terrain_h(x, y):
-    # noise tapers to 0 approaching the eastern shore: the waterline then
-    # crosses on the smooth cliff step alone (no 15m-cell stair silhouette)
     shore_taper = 1.0 - smoothstep(0.0, 1.0, (x - 480.0) / 120.0)
     h = ((sin(x * 0.0021 + 1.3) * cos(y * 0.0017 + 0.7) * 9.0
           + sin(x * 0.0043 + 0.2) * sin(y * 0.0039 + 1.1) * 5.0) * shore_taper
@@ -188,13 +281,11 @@ def terrain_h(x, y):
         if d < best:
             best, bz = d, p[2]
     d = math.sqrt(best)
-    near = 1.0 - smoothstep(6.0, 22.0, d)  # 1 inside road corridor, 0 beyond
+    near = 1.0 - smoothstep(6.0, 22.0, d)
     if d < 22.0:
         h = h * (1 - near) + (bz - 0.6) * near
-    # cliff into the ocean — suppressed inside the corridor so the road keeps
-    # its shoulder and the plunge happens just past the guardrail line
     h -= 55.0 * smoothstep(0.0, 1.0, (x - 540.0) / 220.0) * (1.0 - near)
-    h -= 18.0 * smoothstep(0.0, 1.0, (-y - 560.0) / 240.0)  # southern valley exit
+    h -= 18.0 * smoothstep(0.0, 1.0, (-y - 560.0) / 240.0)
     return h
 
 def build_terrain():
@@ -212,47 +303,13 @@ def build_terrain():
             faces.append((v(ix, iy), v(ix + 1, iy), v(ix + 1, iy + 1), v(ix, iy + 1)))
     return mesh_from("coastal_terrain", verts, faces, MAT["terrain"])
 
-terrain = build_terrain()
+build_terrain()
+mesh_from("coastal_ocean",
+          [(700, -1800, -0.25), (3200, -1800, -0.25),
+           (3200, 1800, -0.25), (700, 1800, -0.25)],
+          [(0, 1, 2, 3)], MAT["ocean"])
 
-# ---------------- ocean ----------------
-ocean = mesh_from("coastal_ocean",
-                  [(700, -1800, -0.25), (3200, -1800, -0.25),
-                   (3200, 1800, -0.25), (700, 1800, -0.25)],
-                  [(0, 1, 2, 3)], MAT["ocean"])
-
-# ---------------- furniture ----------------
 furniture = []
-
-def pad(s):
-    return f"{int(round(s)):04d}"
-
-def ring_prism(name, cx, cy, z0, z1, r, seg, mat):
-    verts, faces = [], []
-    for z in (z0, z1):
-        for k in range(seg):
-            a = 2 * math.pi * k / seg
-            verts.append((cx + r * sin(a), cy + r * cos(a), z))
-    top = list(range(seg)); bot = list(range(seg, 2 * seg))
-    for k in range(seg):
-        j = (k + 1) % seg
-        faces.append((top[k], top[j], bot[j], bot[k]))
-    faces.append(tuple(top))
-    faces.append(tuple(reversed(bot)))
-    return mesh_from(name, verts, faces, mat, (0, 0, 0))
-
-def add_box_verts(verts, faces, dims, center, yaw=0.0):
-    dx, dy, dz = dims
-    cx, cy, cz = center
-    base = len(verts)
-    ca, sa = cos(yaw), sin(yaw)
-    for sx in (-1, 1):
-        for sy in (-1, 1):
-            for sz in (-1, 1):
-                lx, ly, lz = sx * dx / 2, sy * dy / 2, sz * dz / 2
-                verts.append((cx + lx * ca - ly * sa, cy + lx * sa + ly * ca, cz + lz))
-    for off, f in enumerate([(0, 1, 3, 2), (4, 5, 7, 6), (0, 4, 5, 1),
-                             (2, 3, 7, 6), (0, 2, 6, 4), (1, 3, 7, 5)]):
-        faces.append(tuple(vi + base for vi in f))
 
 def guard_runs():
     guarded = set()
@@ -305,7 +362,7 @@ def guard_runs():
             for k in range(m - 1):
                 faces.append((2 * k, 2 * k + 2, 2 * k + 3, 2 * k + 1))
             if lod != "lod2":
-                step = post_step * 2  # posts walk the full-sample grid
+                step = post_step * 2
                 for gi in range(z[0], z[-1] + 1, step):
                     gi = min(gi, z[-1])
                     p, l = S[gi], LEFT[gi]
@@ -332,7 +389,6 @@ def poles():
         add_box_verts(verts, faces, (0.7, 0.25, 0.18),
                       (px - l[0] * side / abs(side) * 1.4, py - l[1] * side / abs(side) * 1.4, p[2] + 6.8))
         mesh_from(name + "_head", verts, faces, MAT["metal"])
-        # lod1: coarse prism, lod2: single column box
         ring_prism(name + "_lod1", px, py, p[2], p[2] + 7.2, 0.14, 6, MAT["metal"])
         lv2, lf2 = [], []
         add_box_verts(lv2, lf2, (0.4, 0.4, 7.2), (px, py, p[2] + 3.6))
@@ -423,6 +479,216 @@ poles()
 signs()
 gantry()
 rocks()
+coastal_furniture = furniture
+furniture = []
+
+# =====================================================================
+# TRACK 2 — DOWNTOWN SPRINT (point-to-point) + 4 crash junctions
+# =====================================================================
+CTRL_DT = [(-40, 0, 0.2), (300, 0, 0.2), (520, 60, 0.2), (640, 220, 0.2),
+           (600, 420, 0.2), (460, 540, 0.3), (240, 580, 0.3), (60, 540, 0.4),
+           (-60, 440, 6.0), (-140, 300, 9.5), (-160, 140, 9.5), (-140, -20, 9.0),
+           (-60, -140, 4.5), (80, -200, 0.2), (320, -240, 0.2), (560, -260, 0.2)]
+
+S2 = resample_open(dense_open(CTRL_DT), SPACING)
+N2 = len(S2)
+TRACK_LEN_DT = (N2 - 1) * SPACING
+T2, L2 = tangents_lefts(S2, False)
+print("TRACK downtown samples:", N2, "length_m:", round(TRACK_LEN_DT, 1))
+
+build_road_mesh("downtown_road", S2, L2, closed=False)
+
+furniture_dt = []
+junctions = []
+JUNCTIONS = [(0.10, 44.0), (0.30, 52.0), (0.47, 56.0), (0.86, 64.0)]
+JZ = [(int(round(f * (N2 - 1))), arm, int(round(f * (N2 - 1))) * SPACING)
+      for f, arm in JUNCTIONS]
+
+def in_junction_zone(s_val, margin):
+    for si, arm, sj in JZ:
+        if abs(s_val - sj) < arm / 2 + margin:
+            return True
+    return False
+
+def on_deck(i):
+    return S2[i][2] > 5.5
+
+mesh_from("downtown_ground",
+          [(-800, -800, 0.0), (1200, -800, 0.0), (1200, 1000, 0.0), (-800, 1000, 0.0)],
+          [(0, 1, 2, 3)], MAT["concrete"])
+
+# underpass: the start avenue visually continues west beneath the overpass deck
+mesh_from("downtown_underpass",
+          [(-280, -5, 0.02), (-40, -5, 0.02), (-40, 5, 0.02), (-280, 5, 0.02)],
+          [(0, 1, 2, 3)], MAT["road"])
+
+def build_junctions():
+    for si, arm, sj in JZ:
+        p, l, t = S2[si], L2[si], T2[si]
+        yaw = math.atan2(t[1], t[0])
+        verts, faces = [], []
+        add_box_verts(verts, faces, (10.0, arm, 0.05), (p[0], p[1], p[2] + 0.03), yaw)
+        mesh_from("downtown_cross_" + pad(sj), verts, faces, MAT["road"])
+        junctions.append({"s": round(sj, 1), "lateral": 0.0, "arm": round(arm, 1)})
+        for band in (si - int((HW + 1.5) / SPACING), si + int((HW + 1.5) / SPACING)):
+            if band < 0 or band > N2 - 1:
+                continue
+            cv, cf = [], []
+            for k in range(5):
+                bi = max(0, min(N2 - 1, band + (k - 2)))
+                bp = S2[bi]
+                add_box_verts(cv, cf, (0.6, 10.0, 0.02), (bp[0], bp[1], bp[2] + 0.02), yaw)
+            mesh_from("props_dt_crosswalk_" + pad(band * SPACING), cv, cf, MAT["white"])
+        for corner in (1, -1):
+            cx = p[0] + (l[0] * (HW + 2.5) + t[0] * (HW + 2.5)) * corner
+            cy = p[1] + (l[1] * (HW + 2.5) + t[1] * (HW + 2.5)) * corner
+            name = "props_dt_signal_" + pad(sj) + ("a" if corner > 0 else "b")
+            dirx, diry = -t[0] * corner, -t[1] * corner
+            ayaw = math.atan2(diry, dirx)
+            ring_prism(name, cx, cy, p[2], p[2] + 5.5, 0.10, 8, MAT["metal"])
+            sv, sf = [], []
+            add_box_verts(sv, sf, (5.0, 0.12, 0.12),
+                          (cx + dirx * 2.5, cy + diry * 2.5, p[2] + 5.3), ayaw)
+            add_box_verts(sv, sf, (0.35, 0.25, 0.85),
+                          (cx + dirx * 5.0, cy + diry * 5.0, p[2] + 4.9), ayaw)
+            mesh_from(name + "_arm", sv, sf, MAT["dark"])
+            furniture_dt.append({"type": "signal", "s": round(sj, 1),
+                                 "lateral": round((HW + 2.5) * corner, 2), "node": name})
+    print("JUNCTIONS:", len(junctions), [j["arm"] for j in junctions])
+
+build_junctions()
+
+def build_deck():
+    spans = []
+    cur = None
+    for i in range(N2):
+        if on_deck(i):
+            if cur is None:
+                cur = [i, i]
+            else:
+                cur[1] = i
+        else:
+            if cur:
+                spans.append(cur)
+            cur = None
+    if cur:
+        spans.append(cur)
+    spans = [sp for sp in spans if sp[1] - sp[0] > 6]
+    if not spans:
+        print("DECK: none")
+        return
+    verts, faces = [], []
+    for a, b in spans:
+        for side in (-1, 1):
+            base = len(verts)
+            for i in range(a, b + 1):
+                p, l = S2[i], L2[i]
+                bx, by = p[0] + l[0] * (HW + 0.35) * side, p[1] + l[1] * (HW + 0.35) * side
+                verts.extend([(bx, by, p[2] + 0.45), (bx, by, p[2] + 0.95)])
+            m = b - a + 1
+            for k in range(m - 1):
+                o = base + 2 * k
+                faces.append((o, o + 2, o + 3, o + 1))
+    mesh_from("downtown_deckbar", verts, faces, MAT["concrete"])
+    count = 0
+    for a, b in spans:
+        for i in range(a + 4, b - 3, 15):
+            p, l = S2[i], L2[i]
+            verts, faces = [], []
+            for side in (-1, 1):
+                add_box_verts(verts, faces, (1.3, 1.3, p[2]),
+                              (p[0] + l[0] * 8.0 * side, p[1] + l[1] * 8.0 * side, p[2] / 2))
+            mesh_from("downtown_pylon_" + pad(i * SPACING), verts, faces, MAT["concrete"])
+            count += 1
+    print("DECK spans:", spans, "pylons:", count)
+
+build_deck()
+
+def build_blocks():
+    placed = []
+    chunk = {"verts": [], "faces": [], "n": 0}
+    def flush():
+        if chunk["faces"]:
+            mesh_from("downtown_block_" + f"{chunk['n']:02d}", chunk["verts"],
+                      chunk["faces"], MAT["building"])
+            chunk["n"] += 1
+            chunk["verts"] = []
+            chunk["faces"] = []
+    for i in range(6, N2 - 6, 16):
+        p, l, t = S2[i], L2[i], T2[i]
+        for side in (-1, 1):
+            lat = side * (HW + 9.0 + random.uniform(0.0, 14.0))
+            bx, by = p[0] + l[0] * lat, p[1] + l[1] * lat
+            s_val = i * SPACING
+            if in_junction_zone(s_val, 14.0):
+                continue
+            if -290.0 < bx < -25.0 and abs(by) < 14.0:
+                continue  # underpass corridor
+            if on_deck(i) and abs(lat) < 26.0:
+                continue  # keep the deck flight corridor clear
+            if any(dist3((bx, by, 0.0), q) < 20.0 for q in placed):
+                continue
+            placed.append((bx, by, 0.0))
+            w = random.uniform(14.0, 26.0)
+            dpth = random.uniform(14.0, 26.0)
+            hgt = random.uniform(8.0, 34.0)
+            yaw = math.atan2(t[1], t[0])
+            add_box_verts(chunk["verts"], chunk["faces"], (w, dpth, hgt),
+                          (bx, by, hgt / 2), yaw)
+            if len(chunk["faces"]) >= 80:
+                flush()
+    flush()
+    print("BLOCKS:", chunk["n"], "buildings:", len(placed))
+
+build_blocks()
+
+def make_pole(name, px, py, pz, dirx, diry):
+    ring_prism(name, px, py, pz, pz + 7.2, 0.12, 12, MAT["metal"])
+    verts, faces = [], []
+    ayaw = math.atan2(diry, dirx)
+    add_box_verts(verts, faces, (1.8, 0.12, 0.12),
+                  (px + dirx * 0.9, py + diry * 0.9, pz + 7.0), ayaw)
+    add_box_verts(verts, faces, (0.7, 0.25, 0.18),
+                  (px + dirx * 1.4, py + diry * 1.4, pz + 6.8), ayaw)
+    mesh_from(name + "_head", verts, faces, MAT["metal"])
+    ring_prism(name + "_lod1", px, py, pz, pz + 7.2, 0.14, 6, MAT["metal"])
+    lv2, lf2 = [], []
+    add_box_verts(lv2, lf2, (0.4, 0.4, 7.2), (px, py, pz + 3.6))
+    mesh_from(name + "_lod2", lv2, lf2, MAT["metal"])
+
+def poles_dt():
+    count = 0
+    for k, i in enumerate(range(0, N2, 40)):
+        if in_junction_zone(i * SPACING, 10.0) or on_deck(i):
+            continue
+        p, l = S2[i], L2[i]
+        side = 6.6 if k % 2 == 0 else -6.6
+        px, py = p[0] + l[0] * side, p[1] + l[1] * side
+        name = "props_dt_pole_" + pad(i * SPACING)
+        make_pole(name, px, py, p[2],
+                  -l[0] * (1 if side > 0 else -1), -l[1] * (1 if side > 0 else -1))
+        furniture_dt.append({"type": "pole", "s": round(i * SPACING, 1),
+                             "lateral": round(side, 2), "node": name})
+        count += 1
+    print("POLES_DT:", count)
+
+poles_dt()
+
+def gantry_dt():
+    p, l, t = S2[0], L2[0], T2[0]
+    yaw = math.atan2(t[1], t[0])
+    verts, faces = [], []
+    for side in (-6.8, 6.8):
+        add_box_verts(verts, faces, (0.5, 0.5, 6.8),
+                      (p[0] + l[0] * side, p[1] + l[1] * side, p[2] + 3.4), yaw)
+    add_box_verts(verts, faces, (14.4, 0.45, 0.5), (p[0], p[1], p[2] + 6.9), yaw)
+    add_box_verts(verts, faces, (8.0, 0.15, 1.7), (p[0], p[1] - 0.4, p[2] + 5.7), yaw)
+    mesh_from("props_dt_gantry_start", verts, faces, MAT["metal"])
+    furniture_dt.append({"type": "gantry", "s": 0.0, "lateral": 0.0,
+                         "node": "props_dt_gantry_start"})
+
+gantry_dt()
+print("FURNITURE_DT:", len(furniture_dt))
 
 # ---------------- world + sun ----------------
 world = bpy.data.worlds.new("sky")
@@ -447,6 +713,25 @@ scene.collection.objects.link(sun)
 sun.rotation_euler = (radians(55), 0.0, radians(90))  # sun in the east over the ocean
 
 # ---------------- exports ----------------
+def to_gltf_axes(p):
+    return [round(p[0], 3), round(p[2], 3), round(-p[1], 3)]
+
+data = {"tracks": [
+    {"id": "coastal", "name": "Coastal Circuit", "closed": True,
+     "centerline": [to_gltf_axes(p) for p in S],
+     "roadWidth": 10.0, "lanes": [-3.6, -1.2, 1.2, 3.6],
+     "furniture": coastal_furniture, "junctions": []},
+    {"id": "downtown", "name": "Downtown Sprint", "closed": False,
+     "centerline": [to_gltf_axes(p) for p in S2],
+     "roadWidth": 10.0, "lanes": [-3.6, -1.2, 1.2, 3.6],
+     "furniture": furniture_dt, "junctions": junctions},
+]}
+json_path = os.path.join(ASSETS, "tracks_data.json")
+with open(json_path, "w", encoding="utf-8") as fh:
+    json.dump(data, fh)
+print("JSON_OK", json_path, "furniture:", len(coastal_furniture), "+",
+      len(furniture_dt), "junctions:", len(junctions))
+
 set_path = os.path.join(ASSETS, "set.blend")
 bpy.ops.wm.save_as_mainfile(filepath=set_path, compress=True)
 print("BLEND_OK", set_path)
@@ -458,23 +743,7 @@ try:
 except Exception as exc:
     print("GLB_FAILED:", exc)
 
-# tracks_data.json — glTF axis mapping: (x, z, -y)
-def to_gltf_axes(p):
-    return [round(p[0], 3), round(p[2], 3), round(-p[1], 3)]
-data = {"tracks": [{
-    "id": "coastal", "name": "Coastal Circuit", "closed": True,
-    "centerline": [to_gltf_axes(p) for p in S],
-    "roadWidth": 10.0,
-    "lanes": [-3.6, -1.2, 1.2, 3.6],
-    "furniture": furniture,
-    "junctions": [],
-}]}
-json_path = os.path.join(ASSETS, "tracks_data.json")
-with open(json_path, "w", encoding="utf-8") as fh:
-    json.dump(data, fh)
-print("JSON_OK", json_path, "furniture:", len(furniture))
-
-# ---------------- env_coast.jpg (early panorama, Cycles) ----------------
+# ---------------- env_coast.jpg (early pano, Cycles) ----------------
 try:
     scene.render.engine = "CYCLES"
     try:
@@ -538,33 +807,35 @@ try:
         scene.render.resolution_x = 1280
         scene.render.resolution_y = 720
         scene.render.image_settings.file_format = "PNG"
-
-        top_data = bpy.data.cameras.new("top")
-        top_data.type = "ORTHO"
-        top_data.ortho_scale = 1800
-        top = bpy.data.objects.new("top", top_data)
-        scene.collection.objects.link(top)
-        top.location = (80, 40, 900)
-        top.rotation_euler = (0.0, 0.0, 0.0)
-        scene.camera = top
-        scene.render.filepath = os.path.join(SHOTS, "track_top.png")
-        bpy.ops.render.render(write_still=True)
-        print("SHOT_OK", scene.render.filepath)
-
-        start_data = bpy.data.cameras.new("startcam")
-        start_data.lens = 40
-        startcam = bpy.data.objects.new("startcam", start_data)
-        scene.collection.objects.link(startcam)
         from mathutils import Vector
-        loc = Vector((560, -760, 10))
-        tgt = Vector((640, -200, 26))
-        startcam.location = loc
-        startcam.rotation_euler = (tgt - loc).to_track_quat("-Z", "Y").to_euler()
-        scene.camera = startcam
-        scene.render.filepath = os.path.join(SHOTS, "track_start.png")
-        bpy.ops.render.render(write_still=True)
-        print("SHOT_OK", scene.render.filepath)
+
+        def shot(cam_name, loc, tgt, ortho_scale, filepath):
+            cd = bpy.data.cameras.new(cam_name)
+            if ortho_scale:
+                cd.type = "ORTHO"
+                cd.ortho_scale = ortho_scale
+            else:
+                cd.lens = 40
+            ob = bpy.data.objects.new(cam_name, cd)
+            scene.collection.objects.link(ob)
+            loc = Vector(loc)
+            tgt = Vector(tgt)
+            ob.location = loc
+            ob.rotation_euler = (tgt - loc).to_track_quat("-Z", "Y").to_euler()
+            scene.camera = ob
+            scene.render.filepath = filepath
+            bpy.ops.render.render(write_still=True)
+            print("SHOT_OK", filepath)
+
+        shot("top", (80, 40, 900), (80, 40, 0), 1800, os.path.join(SHOTS, "track_top.png"))
+        shot("startcam", (560, -760, 10), (640, -200, 26), None,
+             os.path.join(SHOTS, "track_start.png"))
+        shot("dt_top", (200, 180, 950), (200, 180, 0), 1700,
+             os.path.join(SHOTS, "track_dt_top.png"))
+        shot("dt_start", (-220, -320, 8), (240, 40, 4), None,
+             os.path.join(SHOTS, "track_dt_start.png"))
 except Exception as exc:
     print("SHOTS_SKIPPED:", exc)
 
-print("BUILD_DONE track_length_m:", round(TRACK_LEN, 1), "samples:", N)
+print("BUILD_DONE coastal_m:", round(TRACK_LEN_COASTAL, 1), "downtown_m:",
+      round(TRACK_LEN_DT, 1), "samples:", N, "+", N2)
