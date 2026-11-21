@@ -3,6 +3,7 @@
 window.S9 = window.S9 || {};
 (function () {
   const { clamp, lerp, showEvent, fmtMph } = S9.util;
+  const TRACK_DOWN = new THREE.Vector3(0, -1, 0);
 
   class Game {
     constructor(deps) {
@@ -227,7 +228,35 @@ window.S9 = window.S9 || {};
         camPos = p.clone().add(fwd.clone().multiplyScalar(view === 'hood' ? 0.3 : 1.1)).add(new THREE.Vector3(0, view === 'hood' ? 1.38 : 0.65, 0));
         look = p.clone().add(fwd.clone().multiplyScalar(view === 'hood' ? 26 : 30)).add(new THREE.Vector3(0, view === 'hood' ? 0.55 : 0.25, 0));
       } else if (view === 'track') {
-        camPos = this.track.posAt(car.s + 60, 0).add(new THREE.Vector3(0, 26, 0));
+        // elevated perch ahead of the car — downtown blocks rise above the
+        // route, so cast DOWN from above the world and clear the tallest
+        // local surface (an up-ray from inside a block can't see that block)
+        const perch = this.track.posAt(car.s + 50, 0);
+        let py = perch.y + 14; // low perch: city blocks in frame beat ground plane
+        if (this.track.staticRoot) {
+          this._downRay = this._downRay || new THREE.Raycaster();
+          this._downRay.set(new THREE.Vector3(perch.x, 300, perch.z), TRACK_DOWN);
+          this._downRay.far = 300;
+          const hits = this._downRay.intersectObject(this.track.staticRoot, true);
+          if (hits.length) py = Math.max(py, hits[0].point.y + 6);
+        }
+        camPos = perch.clone();
+        camPos.y = py;
+        // sight-line guarantee: blocks line every route point, so on curves the
+        // straight chord perch->car clips a building — cast car->perch and pull
+        // the camera in front of any blocker
+        if (this.track.staticRoot) {
+          const dir = camPos.clone().sub(p);
+          const dist = dir.length();
+          dir.normalize();
+          this._sightRay = this._sightRay || new THREE.Raycaster();
+          this._sightRay.set(p, dir);
+          this._sightRay.far = dist;
+          const block = this._sightRay.intersectObject(this.track.staticRoot, true);
+          if (block.length && block[0].distance < dist) {
+            camPos = p.clone().add(dir.multiplyScalar(Math.max(8, block[0].distance - 2)));
+          }
+        }
         look = p.clone();
       } else { // chase — pull-back with speed
         const dist = C.chaseDist + speedNorm * C.chaseDistSpeed;
