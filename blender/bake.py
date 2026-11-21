@@ -22,6 +22,7 @@ os.makedirs(ASSETS, exist_ok=True)
 
 argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 MODE = argv[0] if argv else "--test"
+ENV_NAME = next((a.split("=", 1)[1] for a in argv if a.startswith("--env=")), None)
 GROUPS = {"coastal": 2048, "downtown": 2048, "props": 1024}
 TEST_RES_SCALE = {"coastal": 512, "downtown": 512, "props": 512}
 SAMPLES = {"--test": 64, "--full": 384}
@@ -29,6 +30,23 @@ MARGIN = {"--test": 4, "--full": 8}
 scene = bpy.context.scene
 
 # ---------------- engine ----------------
+def set_world_env(hdr_path):
+    """CC0-policy HDRI in the bake rig: HDRI = ambient/sky env; the sun lamp
+    stays for sharp directional shadows."""
+    world = scene.world
+    nt = world.node_tree
+    bg = nt.nodes.get("Background")
+    img = bpy.data.images.load(hdr_path, check_existing=True)
+    img.colorspace_settings.name = "Non-Color"
+    for n in list(nt.nodes):
+        if n.type == "TEX_SKY":
+            nt.nodes.remove(n)
+    env = nt.nodes.new("ShaderNodeTexEnvironment")
+    env.image = img
+    nt.links.new(env.outputs[0], bg.inputs[0])
+    bg.inputs[1].default_value = 1.0
+    print("WORLD_ENV:", os.path.basename(hdr_path))
+
 def setup_engine(samples):
     scene.render.engine = "CYCLES"
     try:
@@ -302,6 +320,12 @@ def render_pano():
 
 # ---------------- main ----------------
 setup_engine(SAMPLES.get(MODE, 64))
+if ENV_NAME:
+    env_path = os.path.join(ASSETS, "hdri", ENV_NAME + ".hdr")
+    if os.path.isfile(env_path):
+        set_world_env(env_path)
+    else:
+        print("WORLD_ENV_MISSING:", env_path, "- keeping scene sky")
 groups = collect_groups()
 print("BAKE_MODE:", MODE, "groups:", {g: len(o) for g, o in groups.items()})
 manifest = {"generated_by": "bake.py", "mode": MODE, "atlas_groups": {}}
