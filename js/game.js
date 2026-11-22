@@ -137,13 +137,15 @@ window.S9 = window.S9 || {};
       this.mode = 'race';
       this.paused = false;
       this.race = new S9.Race(this, this.track.closed ? 2 : 1);  // B3 default: 2-lap circuits
-      // rivals in glb blockouts with their own paint
+      // rivals in their own glbs: first three from cars.glb, new pair from rivals.glb
       if (this.assets && this.assets.carsGltf) {
         for (let i = 0; i < this.race.rivals.length; i++) {
           const r = this.race.rivals[i];
           const spec = S9.RACE_RIVALS[i];
+          const src = spec.tok === 'warhawk' || spec.tok === 'halberd' ? this.assets.rivalsGltf : this.assets.carsGltf;
+          if (!src) continue;
           const old = r.mesh;
-          r.swapMesh(S9.buildCarFromGltf(this.assets.carsGltf, r.cfg.id, spec.paint));
+          r.swapMesh(S9.buildCarFromGltf(src, spec.tok, spec.paint));
           this.scene.remove(old);
           this.scene.add(r.mesh);
         }
@@ -160,6 +162,17 @@ window.S9 = window.S9 || {};
       if (this.race) { this.race.dispose(); this.race = null; }
       if (this.crash) { this.crash.dispose(); this.crash = null; }
       if (this.crashLight) { this.scene.remove(this.crashLight, this.crashLight.target); this.crashLight = null; }
+      this.takedowns = 0;
+    }
+
+    // B3 takedown: a rival crashing within 2s of player contact. Signature
+    // (shoved into the wall / into traffic) pays double.
+    awardTakedown(rival, signature) {
+      this.takedowns = (this.takedowns || 0) + 1;
+      const pts = signature ? 2000 : 1000;
+      if (this.race) this.race.score += pts;
+      S9.util.showEvent((signature ? 'SIGNATURE TAKEDOWN ' : 'TAKEDOWN ') + pts, true);
+      this.audio.fire('crash');
     }
 
     toAttract() {
@@ -291,9 +304,10 @@ window.S9 = window.S9 || {};
           this.traffic.update(dt, this.car);
           const hits = this.physics.resolve(this.car, this.traffic, dt);
           if (this.race) {
-            const rhits = this.physics.resolveRivals(this.car, this.race.rivals, dt);
+            const rhits = this.physics.resolveRivals(this.car, this.race.rivals, dt, this.runTime);
             for (const h of rhits) if (h.type === 'graze') this.audio.fire('wall');
             for (const r of this.race.rivals) {
+              this.physics.resolveRivalWorld(r, dt, this.runTime);  // rival wall/traffic crashes
               const rin = r.bot.update(r, this.track, dt);
               r.update(dt, rin);
             }
@@ -489,7 +503,7 @@ window.S9 = window.S9 || {};
       // race corners
       if (r) {
         this.hud.posBig.innerHTML = (r.state === 'countdown' ? '–' : r.playerPos) + '<small id="pos-of">/' + (r.rivals.length + 1) + '</small>';
-        this.hud.scoreBig.textContent = Math.round(this.raceScore || 0);
+        this.hud.scoreBig.textContent = Math.round(r.score || 0);
         if (showLap) this.hud.lapBig.innerHTML = Math.min(r.laps, r.lapCount[0] + 1) + '<small>/' + r.laps + '</small>';
       } else {
         this.hud.scoreBig.textContent = Math.round(this.car.stats.topMph || 0) + '';

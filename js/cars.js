@@ -80,11 +80,14 @@ window.S9 = window.S9 || {};
   S9.BEACON_T = 0;
   S9.tickBeacons = (dt) => { S9.BEACON_T += dt; };
   S9.buildCarFromGltf = function (gltf, classId, paintOverride) {
-    const tok = ({ street: 'street', perf: 'perf', super: 'super', police: 'police' })[classId] || 'street';
+    const tok = ({ street: 'street', perf: 'perf', super: 'super', police: 'police', warhawk: 'warhawk', halberd: 'halberd' })[classId] || 'street';
     const group = new THREE.Group();
     const wheels = [], front = [];
     const isPolice = classId === 'police';
-    const paintColor = paintOverride || ({ street: 0xd8452e, perf: 0x2fb7a9, super: 0xf2f0e6, police: 0xf2f2f0 })[classId] || 0xcccccc;
+    // authored-paint cars (police two-tone, rivals' distinct hues) keep their
+    // glb colors; the three M1 heroes take the class paint
+    const keepAuthored = isPolice || classId === 'warhawk' || classId === 'halberd';
+    const paintColor = paintOverride || ({ street: 0xd8452e, perf: 0x2fb7a9, super: 0xf2f0e6, police: 0xf2f2f0, warhawk: 0x2456c8, halberd: 0x8a7a5a })[classId] || 0xcccccc;
     const beacons = { red: [], blue: [] };
     for (const node of gltf.scene.children) {
       if (!node.name || !node.name.startsWith(tok + '_')) continue;
@@ -96,7 +99,7 @@ window.S9 = window.S9 || {};
         if (/_fl$|_fr$/.test(o.name)) front.push(o);
       });
       clone.traverse((o) => {
-        if (o.isMesh && o.material && !isPolice && o.material.name === 'paint_' + tok) {
+        if (o.isMesh && o.material && !keepAuthored && o.material.name === 'paint_' + tok) {
           o.material.color = new THREE.Color(paintColor);
           o.material.metalness = 0.45; o.material.roughness = 0.34;
           o.material.envMapIntensity = 1.0;

@@ -1,18 +1,22 @@
 // Signal Nine — modes: state machine + the Race event controller.
-// Race: staggered grid start, countdown, 3-lap circuits / point-to-point
-// sprints vs 3 AI rivals, live position, medals by finishing position,
-// best-medal persistence per track.
+// Race: staggered grid start, countdown, 2-lap circuits / point-to-point
+// sprints vs 5 AI rivals (6-car grid), live position, race score (near-miss,
+// oncoming, drift, takedowns), medals by finishing position, best-medal
+// persistence per track.
 window.S9 = window.S9 || {};
 (function () {
   const { clamp } = S9.util;
 
-  const SKILL = [0.97, 0.92, 0.88];               // rival throttle scales — gold is earnable clean
+  const SKILL = [0.97, 0.94, 0.92, 0.9, 0.87];    // rival throttle scales — gold is earnable clean
   const RIVALS = [
-    { cfg: 'perf', name: 'KESTREL MR', paint: 0x2fb7a9 },
-    { cfg: 'super', name: 'APEX GT1', paint: 0xf2f0e6 },
-    { cfg: 'street', name: 'VANDAL GT', paint: 0x3a6fd8 },
+    { cfg: 'perf', name: 'KESTREL MR', paint: 0x2fb7a9, tok: 'perf' },
+    { cfg: 'super', name: 'APEX GT1', paint: 0xf2f0e6, tok: 'super' },
+    { cfg: 'street', name: 'VANDAL GT', paint: 0x3a6fd8, tok: 'street' },
+    { cfg: 'street', name: 'WARHAWK 500', paint: 0x2456c8, tok: 'warhawk' },   // muscle coupe — heavier
+    { cfg: 'super', name: 'HALBERD F12', paint: 0x8a7a5a, tok: 'halberd' },    // flat-12 wedge — widest
   ];
-  const MEDALS = ['GOLD', 'SILVER', 'BRONZE', '4TH'];
+  const MEDALS = ['GOLD', 'SILVER', 'BRONZE', '4TH', '5TH'];
+  const RIVAL_CFG_TWEAK = { 'WARHAWK 500': { mass: 1420, steerRate: 1.7, grip: 6.2 }, 'HALBERD F12': { mass: 1060, steerRate: 2.5, grip: 7.6, topSpeed: 88 } };
 
   class Modes {
     constructor(game) {
@@ -67,7 +71,7 @@ window.S9 = window.S9 || {};
           accel: base.accel * SKILL[i],
           topSpeed: base.topSpeed * (0.97 + i * 0.015),
           boostTop: base.boostTop * (0.97 + i * 0.015),
-        });
+        }, RIVAL_CFG_TWEAK[spec.name] || {});
         const rival = new S9.Car(this.track, cfg);
         const L = this.track.length;
         rival.s = this.track.closed ? ((30 - 9 - i * 9) + L) % L : clamp(30 - 9 - i * 9, 2, L - 2);
@@ -75,13 +79,15 @@ window.S9 = window.S9 || {};
         rival.heading = this.track.tangentYawAt(rival.s);
         rival.place();
         rival.bot = new S9.Bot();
+        rival.takedownInfo = { lastPlayerHit: -99, signature: false }; // takedown attribution
         if (rival.shadowMesh) game.scene.add(rival.shadowMesh);
         game.scene.add(rival.mesh);
         return rival;
       });
       this.prevS = [this.player.s, ...this.rivals.map(r => r.s)];
-      this.lapCount = [0, 0, 0, 0];     // wraps on circuits
-      this.done = [false, false, false, false];
+      this.lapCount = [0, 0, 0, 0, 0, 0];     // wraps on circuits
+      this.done = [false, false, false, false, false, false];
+      this.score = 0;
     }
 
     progress(i) {
@@ -129,16 +135,37 @@ window.S9 = window.S9 || {};
           this.finishOrder.push(i);
           if (i === 0) {
             this.playerPos = this.finishOrder.length;
-            this.medal = MEDALS[clamp(this.playerPos - 1, 0, 3)];
+            this.medal = MEDALS[clamp(this.playerPos - 1, 0, 4)];
             this.state = 'finished';
             this.resultsTimer = 1.4;
-            S9.util.showEvent(this.medal === '4TH' ? 'FINISHED' : this.medal + ' MEDAL', true);
+            S9.util.showEvent(this.medal === '4TH' || this.medal === '5TH' ? 'FINISHED ' + this.playerPos : this.medal + ' MEDAL', true);
           }
+        }
+      }
+      // takedown attribution: a rival crashing within 2s of player contact is
+      // the player's takedown — signature if the rival was airborne or slammed
+      // a traffic car (heavier payout handled by the game layer)
+      const now = this.game.runTime;
+      for (let k = 0; k < this.rivals.length; k++) {
+        const rv = this.rivals[k];
+        if (rv.crashed > 0 && !rv.takedownInfo.counted) {
+          rv.takedownInfo.counted = true;
+          if (now - rv.takedownInfo.lastPlayerHit < 2.0) {
+            const signature = rv.takedownInfo.signature;
+            this.game.awardTakedown(rv, signature);
+          }
+        } else if (rv.crashed <= 0) {
+          rv.takedownInfo.counted = false;
         }
       }
       if (!this.done[0]) {
         this.playerPos = 1 + this.rivals.filter((_, k) => !this.done[k + 1] && this.progress(k + 1) > this.progress(0)).length;
       }
+      // race score — B3 economy: drift 50/s, oncoming 25/s, near-miss 150,
+      // takedowns 1000 (awarded by the game on rival crash attribution)
+      const st = this.game.car.stats;
+      this.score = Math.round(
+        st.nearMisses * 150 + st.driftTime * 50 + st.oncomingTime * 25 + this.game.takedowns * 1000);
     }
   }
 

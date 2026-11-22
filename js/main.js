@@ -97,8 +97,8 @@ window.S9 = window.S9 || {};
     scene.add(sun);
 
     const trackData = await loadTrackData();
-    const [tracksGltf, carsGltf, trafficGltf, policeGltf, envTex, manifest] = await Promise.all([
-      loadGltf('tracks.glb'), loadGltf('cars.glb'), loadGltf('traffic.glb'), loadGltf('police.glb'), loadEnv(), loadManifest()]);
+    const [tracksGltf, carsGltf, trafficGltf, policeGltf, rivalsGltf, envTex, manifest] = await Promise.all([
+      loadGltf('tracks.glb'), loadGltf('cars.glb'), loadGltf('traffic.glb'), loadGltf('police.glb'), loadGltf('rivals.glb'), loadEnv(), loadManifest()]);
     // slot tints for the dressing props (wood crates, metal racks/stacks) —
     // the glb ships them unlit-flat; warm wood + steel reads weathered
     for (const node of trafficGltf.scene.children) node.traverse((o) => {
@@ -164,7 +164,7 @@ window.S9 = window.S9 || {};
     const physics = new S9.Physics(scene);
     const speedfx = new S9.SpeedFX(renderer, scene, camera, P.fx);
     const audio = new S9.AudioSet();
-    const game = new S9.Game({ scene, camera, renderer, track, car, traffic, physics, speedfx, audio, assets: { carsGltf, trafficGltf } });
+    const game = new S9.Game({ scene, camera, renderer, track, car, traffic, physics, speedfx, audio, assets: { carsGltf, trafficGltf, rivalsGltf } });
     if (P.auto) game.bot = new S9.Bot();
 
     // state jump from URL (?state=)

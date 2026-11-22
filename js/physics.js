@@ -103,7 +103,7 @@ window.S9 = window.S9 || {};
     // Gates: closing speed > 3 m/s (side-by-side drafting is NOT contact) and a
     // shared cooldown — without them overlapping rivals scrub the player to a
     // dead stop frame by frame.
-    resolveRivals(car, rivals, dt) {
+    resolveRivals(car, rivals, dt, runTime) {
       const events = [];
       if (car.crashed > 0 || car.invuln > 0) return events;
       this.rivalGrazeCool = Math.max(0, (this.rivalGrazeCool || 0) - dt);
@@ -119,11 +119,54 @@ window.S9 = window.S9 || {};
           this.sparks.burst(car.mesh.position, 6, 3);
           car.graze(Math.sign(latGap) || 1);
           r.graze(-Math.sign(latGap) || 1);
-          events.push({ type: 'graze' });
+          // takedown attribution: player contact time + shove-into-wall marker
+          if (r.takedownInfo) {
+            r.takedownInfo.lastPlayerHit = runTime;
+            if (Math.abs(r.lateral) > 3.2) r.takedownInfo.signature = true;
+          }
+          events.push({ type: 'graze', rival: r });
         }
       }
       return events;
     }
+
+    // rival-vs-world crashes: walls and traffic crash rivals exactly like the
+      // player — the race layer attributes them to recent player contact
+      resolveRivalWorld(rival, dt, runTime) {
+        if (rival.crashed > 0 || rival.invuln > 0) return;
+        const T = rival.track, lim = T.halfW - 0.95;
+        if (Math.abs(rival.lateral) > lim) {
+          const side = Math.sign(rival.lateral);
+          rival.lateral = side * lim;
+          rival.speed *= S9.CFG.physics.wallScrub;
+          // crash if the slam was hard (closing the wall fast)
+          if (Math.abs(rival.speed * Math.sin(rival.slip)) > 7) {
+            rival.crashed = 2.2;
+            if (rival.takedownInfo) rival.takedownInfo.signature = Math.abs(rival.lateral) > 3.2;
+            return;
+          }
+          const latVel = -rival.speed * Math.sin(rival.slip);
+          if (latVel * side > 0) {
+            const slipOut = Math.asin(clamp(latVel * 0.35 / Math.max(rival.speed, 2), -0.45, 0.45));
+            rival.heading = T.tangentYawAt(rival.s) + side * Math.max(0.32, Math.abs(slipOut) * 1.2);
+          }
+        }
+        // traffic contact at closing speed crashes the rival too (player-shove chains)
+        for (const c of rival.track.trafficRef.cars) {
+          const L = T.length;
+          let ds = (c.s - rival.s) % L;
+          if (ds > L / 2) ds -= L; if (ds < -L / 2) ds += L;
+          const latGap = c.lane - rival.lateral;
+          if (Math.abs(ds) < (1.9 + c.t.len) / 2 - 0.35 && Math.abs(latGap) < (1.9 + c.t.wid) / 2 - 0.12) {
+            const closing = Math.abs(rival.speed - c.dir * c.speed);
+            if (closing > S9.CFG.physics.crashRelSpeed) {
+              rival.crashed = 2.2;
+              rival.takedownInfo.signature = true;   // traffic takedowns are signature by default
+              return;
+            }
+          }
+        }
+      }
 
     update(dt, car) {
       this.sparks.update(dt);
