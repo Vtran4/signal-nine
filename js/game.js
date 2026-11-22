@@ -15,13 +15,14 @@ window.S9 = window.S9 || {};
       this.boostEase = 0;
       this.raceScore = 0;
       this.driveLap = 0;      // free-drive lap counter (resets on run start)
+      this.takedowns = 0;
+      this.debris = [];       // Phase E4 ballistic parts
       this.keys = {};
       this.gp = { throttle: 0, brake: 0, steer: 0, boost: false, drift: false };
       this.best = this.#loadBest();
       this.#bindInput();
       this.hud = {
         bar: document.getElementById('boostbar'),
-        chain: document.getElementById('chain'),
         bl: document.getElementById('hud-bl'),
         br: document.getElementById('hud-br'),
         raceinfo: document.getElementById('raceinfo'),
@@ -63,7 +64,15 @@ window.S9 = window.S9 || {};
       const b = (id, fn) => document.getElementById(id).addEventListener('click', fn);
       b('btn-play', () => this.startRun());
       b('btn-race', () => this.startRace());
-      b('btn-crash', () => this.startCrash(0));
+      b('btn-crash', () => {
+        // junctions live on downtown — route there when the current track has none
+        if (this.track.junctions && this.track.junctions.length) this.startCrash(0);
+        else {
+          const p2 = new URLSearchParams(location.search);
+          p2.set('track', 'downtown'); p2.set('state', 'crash1');
+          location.search = p2.toString();
+        }
+      });
       // track chips: set the ?track param and reload — the boot assembles the
       // whole world from it, so a fresh load is the safe switch
       const params = new URLSearchParams(location.search);
@@ -76,7 +85,13 @@ window.S9 = window.S9 || {};
         });
       });
       b('btn-resume', () => this.togglePause());
-      b('btn-restart', () => { this.togglePause(); this.startRun(); });
+      b('btn-restart', () => {
+        this.togglePause();
+        // restart respects the mode: race restarts the race, crash replays the junction
+        if (this.mode === 'race') this.startRace();
+        else if (this.mode === 'crash' && this.crash) this.startCrash(this.crash.idx);
+        else this.startRun();
+      });
       b('btn-quit', () => { this.togglePause(); this.toAttract(); });
       b('snd', () => {
         const snd = document.getElementById('snd');
@@ -131,6 +146,7 @@ window.S9 = window.S9 || {};
       this.runTime = 0;
       this.mode = 'drive';
       this.paused = false;
+      this.#wireShatter();
       this.#snapCamera();
       this.hud.menu.classList.remove('on');
       this.hud.results.classList.remove('on');
@@ -165,6 +181,7 @@ window.S9 = window.S9 || {};
           this.scene.add(r.mesh);
         }
       }
+      this.#wireShatter();
       this.#snapCamera();
       this.hud.menu.classList.remove('on');
       this.hud.results.classList.remove('on');
@@ -178,6 +195,8 @@ window.S9 = window.S9 || {};
       if (this.crash) { this.crash.dispose(); this.crash = null; }
       if (this.crashLight) { this.scene.remove(this.crashLight, this.crashLight.target); this.crashLight = null; }
       this.takedowns = 0;
+      for (const d of this.debris) this.scene.remove(d);
+      this.debris.length = 0;
     }
 
     // B3 takedown: a rival crashing within 2s of player contact. Signature
@@ -208,6 +227,7 @@ window.S9 = window.S9 || {};
       this.mode = 'crash';
       this.paused = false;
       this.crash = new S9.Crash(this, idx);
+      this.#wireShatter();
       this.#snapCamera();
       this.hud.menu.classList.remove('on');
       this.hud.results.classList.remove('on');
@@ -283,7 +303,7 @@ window.S9 = window.S9 || {};
     onModeChange(from, to) { this.mode = to; }
 
     togglePause() {
-      if (this.mode !== 'drive') return;
+      if (this.mode !== 'drive' && this.mode !== 'race' && this.mode !== 'crash') return;
       this.paused = !this.paused;
       this.hud.pause.classList.toggle('on', this.paused);
     }
@@ -322,7 +342,9 @@ window.S9 = window.S9 || {};
             const rhits = this.physics.resolveRivals(this.car, this.race.rivals, dt, this.runTime);
             for (const h of rhits) if (h.type === 'graze') this.audio.fire('wall');
             for (const r of this.race.rivals) {
+              const wasCrashed = r.crashed;
               this.physics.resolveRivalWorld(r, dt, this.runTime);  // rival wall/traffic crashes
+              if (wasCrashed <= 0 && r.crashed > 0 && r.onShatter) r.onShatter(r);  // Phase E4
               const rin = r.bot.update(r, this.track, dt);
               r.update(dt, rin);
             }
@@ -387,6 +409,65 @@ window.S9 = window.S9 || {};
     }
 
     // camera placed instantly (no fly-in) on run start / state jumps
+    // ---------- Phase E4 debris engine ----------
+    #initDebris() {
+      this.debris = [];
+    }
+
+    #updateDebris(dt) {
+      const G = 22;
+      for (let i = this.debris.length - 1; i >= 0; i--) {
+        const d = this.debris[i], u = d.userData.debris;
+        u.life -= dt;
+        if (u.life <= 0 || d.position.y < -3) {
+          this.scene.remove(d);
+          this.debris.splice(i, 1);
+          continue;
+        }
+        u.vel.y -= G * dt;
+        d.position.addScaledVector(u.vel, dt);
+        d.rotation.x += u.spin.x * dt; d.rotation.y += u.spin.y * dt; d.rotation.z += u.spin.z * dt;
+        if (d.position.y < 0.3 && u.vel.y < 0) {   // ground bounce
+          d.position.y = 0.3;
+          u.vel.y *= -0.38; u.vel.x *= 0.72; u.vel.z *= 0.72;
+          u.spin.multiplyScalar(0.6);
+          if (++u.bounce > 3) { u.vel.set(0, u.vel.y, 0); u.spin.multiplyScalar(0.3); }
+        }
+        // fade the last half-second (scale-down; materials are shared)
+        if (u.life < 0.5) {
+          const k = Math.max(0.01, u.life / 0.5);
+          d.scale.setScalar(k);
+        }
+      }
+      // cap the pile — oldest first
+      while (this.debris.length > 48) {
+        const d = this.debris.shift();
+        this.scene.remove(d);
+      }
+    }
+
+
+    // Phase E4 wiring: shatter hooks + rebuild closures for every racer
+    #wireShatter() {
+      const rebuildFor = (car, gltf, tok) => () => {
+        const old = car.mesh;
+        car.swapMesh(S9.buildCarFromGltf(gltf, tok, car.cfg && car.cfg.paint));
+        this.scene.remove(old);
+        this.scene.add(car.mesh);
+      };
+      const A = this.assets || {};
+      this.car.onShatter = (c) => c.shatterVia(this.scene, this.debris);
+      this.car.carRebuild = rebuildFor(this.car, A.carsGltf, this.car.cfg.id);
+      if (this.race) {
+        for (let i = 0; i < this.race.rivals.length; i++) {
+          const r = this.race.rivals[i];
+          const spec = S9.RACE_RIVALS[i];
+          const src = spec && (spec.tok === 'warhawk' || spec.tok === 'halberd') ? A.rivalsGltf : A.carsGltf;
+          r.onShatter = (c) => c.shatterVia(this.scene, this.debris);
+          r.carRebuild = rebuildFor(r, src, spec ? spec.tok : r.cfg.id);
+        }
+      }
+    }
     #snapCamera() {
       const car = this.car, C = S9.CFG.camera;
       const p = car.mesh.position;
@@ -492,6 +573,8 @@ window.S9 = window.S9 || {};
     #hideCapsules() {
       for (const id of ['capPos', 'capScore', 'capLap', 'capBoost', 'capSpeed']) this.hud[id].style.display = 'none';
     }
+    updateDebris(dt) { this.#updateDebris(dt); }
+
     #updateHud() {
       if (this.mode !== 'drive' && this.mode !== 'race') return;
       const inRace = this.mode === 'race' && this.race;

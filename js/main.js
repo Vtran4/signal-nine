@@ -210,6 +210,7 @@ window.S9 = window.S9 || {};
       last = now;
 
       game.update(dtRaw);
+      game.updateDebris(dtRaw);
       S9.tickBeacons(dtRaw);            // shared lightbar/flasher clock
       if (track.lodGroups && (++lodTick % 12 === 0)) track.applyLod(camera.position);
       speedfx.render();

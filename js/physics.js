@@ -114,17 +114,30 @@ window.S9 = window.S9 || {};
         if (car.track.closed) { ds %= L; if (ds > L / 2) ds -= L; if (ds < -L / 2) ds += L; }
         const latGap = r.lateral - car.lateral;
         const closing = Math.abs(car.speed - r.speed);
-        if (Math.abs(ds) < 4.2 && Math.abs(latGap) < 1.8 && closing > 3 && this.rivalGrazeCool <= 0) {
-          this.rivalGrazeCool = 0.5;
-          this.sparks.burst(car.mesh.position, 6, 3);
-          car.graze(Math.sign(latGap) || 1);
-          r.graze(-Math.sign(latGap) || 1);
+        if (Math.abs(ds) < 4.2 && Math.abs(latGap) < 1.9 && closing > 3 && this.rivalGrazeCool <= 0) {
+          this.rivalGrazeCool = 0.4;
+          this.sparks.burst(car.mesh.position, closing > 8 ? 16 : 6, closing > 8 ? 6 : 3);
           // takedown attribution: player contact time + shove-into-wall marker
           if (r.takedownInfo) {
             r.takedownInfo.lastPlayerHit = runTime;
             if (Math.abs(r.lateral) > 3.2) r.takedownInfo.signature = true;
           }
-          events.push({ type: 'graze', rival: r });
+          if (closing > 8) {
+            // HARD BUMP (player-favoring): the rival takes the knock — spun
+            // off-line and slowed; the player scrubs only a little. A shove
+            // past the wall line hands the crash to resolveRivalWorld.
+            const dir = Math.sign(latGap) || 1;
+            r.slip += dir * clamp(closing * 0.014, 0.1, 0.5);
+            r.lateral += dir * (0.4 + closing * 0.012);
+            r.speed *= 0.8;
+            car.speed *= 0.94;
+            events.push({ type: 'bump', rival: r });
+          } else {
+            // light graze: the original scrub + nudge
+            car.graze(Math.sign(latGap) || 1);
+            r.graze(-Math.sign(latGap) || 1);
+            events.push({ type: 'graze', rival: r });
+          }
         }
       }
       return events;

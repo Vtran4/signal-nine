@@ -273,6 +273,8 @@ window.S9 = window.S9 || {};
       this.slip = 0;
       this.boost.meter = 0; this.boost.active = false; this.boost.chain = 0;
       this.invuln = 2;
+      // Phase E4: rebuild the intact car if the crash shattered it
+      if (this.shattered && this.carRebuild) { this.carRebuild(); this.shattered = false; }
       this.place();
     }
 
@@ -281,6 +283,8 @@ window.S9 = window.S9 || {};
       this.crashed = 1.4;
       this.boost.meter = 0; this.boost.active = false; this.boost.chain = 0;
       this.stats.crashes++;
+      // Phase E4: the car breaks into pieces at the moment of the crash
+      if (this.onShatter) this.onShatter(this);
       return true;
     }
 
@@ -295,6 +299,40 @@ window.S9 = window.S9 || {};
       this.meshWheels = build.wheels;
       this.meshFront = build.front || [];
       this.place();
+    }
+
+    // Phase E4: shatter — detach the contract parts as ballistic debris and
+    // leave the hull reading damaged. Parts fly outward + forward, bounce,
+    // fade, and despawn; respawn() restores the intact car via carRebuild.
+    shatterVia(scene, debrisOut) {
+      if (this.shattered) return;
+      this.shattered = true;
+      const vel = new THREE.Vector3(Math.sin(this.heading), 0, Math.cos(this.heading)).multiplyScalar(this.speed * 0.35);
+      const parts = [];
+      this.mesh.traverse((o) => {
+        if (!o.isMesh || !o.name) return;
+        if (/bumper_f|bumper_r|hood|spoiler/.test(o.name) || /wheel_|rim_/.test(o.name)) parts.push(o);
+      });
+      for (const part of parts) {
+        const wp = new THREE.Vector3(), wq = new THREE.Quaternion(), ws = new THREE.Vector3();
+        part.getWorldPosition(wp); part.getWorldQuaternion(wq); part.getWorldScale(ws);
+        // keep world transform when re-parenting to the scene
+        const world = new THREE.Mesh(part.geometry, part.material);
+        world.name = 'debris_' + part.name;
+        world.position.copy(wp); world.quaternion.copy(wq); world.scale.copy(ws);
+        const rnd = (a) => (Math.random() - 0.5) * a;
+        world.userData.debris = {
+          vel: new THREE.Vector3(vel.x * (0.6 + Math.random() * 0.8) + rnd(9), 3.5 + Math.random() * 4, vel.z * (0.6 + Math.random() * 0.8) + rnd(9)),
+          spin: new THREE.Vector3(rnd(14), rnd(14), rnd(14)),
+          life: 3.2 + Math.random() * 1.2,
+          bounce: 0,
+        };
+        scene.add(world);
+        debrisOut.push(world);
+      }
+      for (const part of parts) {
+        if (part.parent) part.parent.remove(part);
+      }
     }
 
     place() {
