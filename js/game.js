@@ -13,12 +13,12 @@ window.S9 = window.S9 || {};
       this.paused = false;
       this.bot = null;
       this.boostEase = 0;
+      this.raceScore = 0;
       this.keys = {};
       this.gp = { throttle: 0, brake: 0, steer: 0, boost: false, drift: false };
       this.best = this.#loadBest();
       this.#bindInput();
       this.hud = {
-        speed: document.getElementById('speed'),
         bar: document.getElementById('boostbar'),
         chain: document.getElementById('chain'),
         bl: document.getElementById('hud-bl'),
@@ -28,6 +28,20 @@ window.S9 = window.S9 || {};
         pause: document.getElementById('pause'),
         results: document.getElementById('results'),
         best: document.getElementById('menu-best'),
+        // B3 corner capsules
+        capPos: document.getElementById('cap-pos'),
+        capScore: document.getElementById('cap-score'),
+        capLap: document.getElementById('cap-lap'),
+        capBoost: document.getElementById('cap-boost'),
+        capSpeed: document.getElementById('cap-speed'),
+        posBig: document.getElementById('pos-big'),
+        posOf: document.getElementById('pos-of'),
+        scoreBig: document.getElementById('score-big'),
+        lapBig: document.getElementById('lap-big'),
+        mult: document.getElementById('mult'),
+        speedBig: document.getElementById('speed-big'),
+        chipOncoming: document.getElementById('chip-oncoming'),
+        chipDrift: document.getElementById('chip-drift'),
       };
       document.getElementById('carname').textContent = this.car.cfg.name;
     }
@@ -106,8 +120,7 @@ window.S9 = window.S9 || {};
       this.hud.menu.classList.remove('on');
       this.hud.results.classList.remove('on');
       this.hud.pause.classList.remove('on');
-      this.hud.bl.style.display = 'block';
-      this.hud.br.style.display = 'block';
+      this.#showCapsules();
     }
 
     startRace() {
@@ -123,7 +136,7 @@ window.S9 = window.S9 || {};
       this.runTime = 0;
       this.mode = 'race';
       this.paused = false;
-      this.race = new S9.Race(this, this.track.closed ? 3 : 1);
+      this.race = new S9.Race(this, this.track.closed ? 2 : 1);  // B3 default: 2-lap circuits
       // rivals in glb blockouts with their own paint
       if (this.assets && this.assets.carsGltf) {
         for (let i = 0; i < this.race.rivals.length; i++) {
@@ -139,8 +152,7 @@ window.S9 = window.S9 || {};
       this.hud.menu.classList.remove('on');
       this.hud.results.classList.remove('on');
       this.hud.pause.classList.remove('on');
-      this.hud.bl.style.display = 'block';
-      this.hud.br.style.display = 'block';
+      this.#showCapsules();
     }
 
     cleanupRace() {
@@ -152,8 +164,7 @@ window.S9 = window.S9 || {};
 
     toAttract() {
       this.cleanupRace();
-      this.hud.bl.style.display = 'none';
-      this.hud.br.style.display = 'none';
+      this.#hideCapsules();
       this.hud.results.classList.remove('on');
       this.hud.best.textContent = this.best
         ? `Best today: ${Math.round(this.best.topMph)} mph · ${this.best.burnouts} burnouts`
@@ -173,8 +184,7 @@ window.S9 = window.S9 || {};
       this.hud.menu.classList.remove('on');
       this.hud.results.classList.remove('on');
       this.hud.pause.classList.remove('on');
-      this.hud.bl.style.display = 'block';
-      this.hud.br.style.display = 'block';
+      this.#showCapsules();
       if (this.hud.raceinfo) this.hud.raceinfo.textContent = '';
     }
 
@@ -202,8 +212,7 @@ window.S9 = window.S9 || {};
       document.getElementById('res-score').textContent = S9.util.fmtDollars(total);
       document.getElementById('res-detail').textContent =
         total >= best && total > 0 ? 'NEW JUNCTION RECORD' : 'junction best: ' + S9.util.fmtDollars(best);
-      this.hud.bl.style.display = 'none';
-      this.hud.br.style.display = 'none';
+      this.#hideCapsules();
       this.hud.results.classList.add('on');
     }
 
@@ -223,8 +232,7 @@ window.S9 = window.S9 || {};
         if (!medals[this.track.id] || rank < medals[this.track.id]) medals[this.track.id] = rank;
         localStorage.setItem('s9_medals', JSON.stringify(medals));
       } catch (e) { /* private mode */ }
-      this.hud.bl.style.display = 'none';
-      this.hud.br.style.display = 'none';
+      this.#hideCapsules();
       this.hud.results.classList.add('on');
     }
 
@@ -240,8 +248,7 @@ window.S9 = window.S9 || {};
         this.best = { day: today, topMph: s.topMph, burnouts: s.burnouts, nearMisses: s.nearMisses };
         try { localStorage.setItem('s9_best_day', JSON.stringify(this.best)); } catch (e) { /* private mode */ }
       }
-      this.hud.bl.style.display = 'none';
-      this.hud.br.style.display = 'none';
+      this.#hideCapsules();
       this.hud.results.classList.add('on');
     }
 
@@ -449,20 +456,48 @@ window.S9 = window.S9 || {};
       }
     }
 
+
+    #showCapsules() {
+      for (const id of ['capPos', 'capScore', 'capLap', 'capBoost', 'capSpeed']) this.hud[id].style.display = 'block';
+    }
+    #hideCapsules() {
+      for (const id of ['capPos', 'capScore', 'capLap', 'capBoost', 'capSpeed']) this.hud[id].style.display = 'none';
+    }
     #updateHud() {
       if (this.mode !== 'drive' && this.mode !== 'race') return;
-      this.hud.speed.innerHTML = fmtMph(this.car.speed) + '<small>MPH</small>';
+      const inRace = this.mode === 'race' && this.race;
+      const r = inRace ? this.race : null;
+      // corner capsule visibility: POS+SCORE+LAP race-only; SPEED+BOOST always
+      const showPos = !!r, showLap = !!r && this.track.closed;
+      this.hud.capPos.style.display = showPos ? 'block' : 'none';
+      this.hud.capScore.style.display = showPos ? 'block' : 'none';
+      this.hud.capLap.style.display = showLap ? 'block' : 'none';
+      this.hud.capBoost.style.display = 'block';
+      this.hud.capSpeed.style.display = 'block';
+      // speed block
+      this.hud.speedBig.innerHTML = fmtMph(this.car.speed) + '<small> MPH</small>';
+      // boost meter + multiplier (chain +1 per burnout in the current chain)
       const b = this.car.boost;
       this.hud.bar.style.width = (b.meter * 100).toFixed(1) + '%';
       this.hud.bar.classList.toggle('burn', b.active);
-      if (b.chain > 0 && b.active) { this.hud.chain.style.display = 'block'; this.hud.chain.textContent = 'BURNOUT ×' + (b.chain + 1); }
-      else this.hud.chain.style.display = 'none';
-      // race position/lap line
-      if (this.mode === 'race' && this.race) {
-        const r = this.race;
+      const mult = 1 + (b.active ? b.chain : Math.max(0, b.chain - (b.active ? 0 : 1)));
+      this.hud.mult.textContent = '×' + Math.max(1, b.active ? b.chain + 1 : 1);
+      // earn-source chips: lit while that earn channel is paying out
+      this.hud.chipOncoming.classList.toggle('on',
+        this.car.lateral < (this.track.oncomingEdge !== undefined ? this.track.oncomingEdge : -1.2) && this.car.speed > 12 && !this.car.crashed);
+      this.hud.chipDrift.classList.toggle('on', this.car.drifting && this.car.speed > S9.CFG.boost.driftMinSpeed);
+      // race corners
+      if (r) {
+        this.hud.posBig.innerHTML = (r.state === 'countdown' ? '–' : r.playerPos) + '<small id="pos-of">/' + (r.rivals.length + 1) + '</small>';
+        this.hud.scoreBig.textContent = Math.round(this.raceScore || 0);
+        if (showLap) this.hud.lapBig.innerHTML = Math.min(r.laps, r.lapCount[0] + 1) + '<small>/' + r.laps + '</small>';
+      } else {
+        this.hud.scoreBig.textContent = Math.round(this.car.stats.topMph || 0) + '';
+      }
+      // legacy raceinfo line kept for debug probes
+      if (r) {
         const lapTxt = this.track.closed ? `LAP ${Math.min(r.laps, r.lapCount[0] + 1)}/${r.laps} · ` : 'SPRINT · ';
-        const posTxt = r.state === 'countdown' ? 'GRID' : `POS ${r.playerPos}/4`;
-        this.hud.raceinfo.textContent = lapTxt + posTxt;
+        this.hud.raceinfo.textContent = lapTxt + (r.state === 'countdown' ? 'GRID' : `POS ${r.playerPos}/${r.rivals.length + 1}`);
       } else if (this.hud.raceinfo) this.hud.raceinfo.textContent = '';
     }
 

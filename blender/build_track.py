@@ -49,6 +49,9 @@ MAT = {
     "metal":  pbr("metal",  (0.65, 0.67, 0.70), 0.6, 0.45),
     "white":  pbr("white",  (0.85, 0.85, 0.82)),
     "sign_red": pbr("sign_red", (0.75, 0.10, 0.08), 0.0, 0.5),
+    "signal_red": pbr("signal_red", (0.80, 0.08, 0.06), 0.0, 0.4),
+    "signal_amber": pbr("signal_amber", (0.85, 0.55, 0.05), 0.0, 0.4),
+    "signal_green": pbr("signal_green", (0.10, 0.60, 0.15), 0.0, 0.4),
     "concrete": pbr("concrete", (0.55, 0.54, 0.52)),
     "building": pbr("building", (0.50, 0.48, 0.46)),
     "dark":   pbr("dark",   (0.10, 0.10, 0.12)),
@@ -619,6 +622,13 @@ def build_junctions():
             add_box_verts(sv, sf, (0.35, 0.25, 0.85),
                           (cx + dirx * 5.0, cy + diry * 5.0, p[2] + 4.9), ayaw)
             mesh_from(name + "_arm", sv, sf, MAT["dark"])
+            hx, hy = cx + dirx * 5.0, cy + diry * 5.0
+            for li, (lz, lmat) in enumerate(((0.24, "signal_red"), (0.0, "signal_amber"),
+                                             (-0.24, "signal_green"))):
+                lv2, lf2 = [], []
+                add_box_verts(lv2, lf2, (0.05, 0.20, 0.16),
+                              (hx + dirx * 0.14, hy + diry * 0.14, p[2] + 4.9 + lz), ayaw)
+                mesh_from(name + "_lens_" + "rgb"[li], lv2, lf2, MAT[lmat])
             furniture_dt.append({"type": "signal", "s": round(sj, 1),
                                  "lateral": round((HW + 2.5) * corner, 2), "node": name})
     print("JUNCTIONS:", len(junctions), [j["arm"] for j in junctions])

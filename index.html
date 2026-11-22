@@ -18,7 +18,7 @@
   .arcade { font-family: 'Anton', 'Barlow Condensed', 'Arial Narrow', sans-serif; }
   .cond { font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; }
 
-  .hud { position: fixed; top: 14px; left: 16px; color: var(--cream); z-index: 5; user-select: none; }
+  .hud { position: fixed; top: 14px; left: 16px; color: var(--cream); z-index: 5; user-select: none; display: none; }
   .hud h1 { font-size: 19px; margin: 0; letter-spacing: .1em; text-shadow: 2px 2px 0 rgba(23,38,59,.85); }
   .hud p { font-size: 12px; margin: 3px 0 0; opacity: .8; font-family: 'Barlow Condensed', sans-serif; letter-spacing: .04em; }
 
@@ -28,19 +28,46 @@
          padding: 7px 13px; cursor: pointer; box-shadow: 0 0 12px rgba(47,183,169,.35); }
   #snd:hover { background: #26456a; }
 
-  /* ---- driving HUD ---- */
+  /* ---- driving HUD — B3-style corner capsules ---- */
+  /* skewed dark-navy parallelogram capsules; yellow = live values, white = labels */
+  .cap { position: fixed; z-index: 5; display: none; user-select: none; pointer-events: none;
+         background: rgba(19, 30, 46, 0.82); color: var(--cream);
+         font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+         transform: skewX(-8deg); padding: 6px 18px; box-shadow: 3px 3px 0 rgba(10, 16, 26, .55); }
+  .cap > * { transform: skewX(8deg); }   /* un-skew content so italics read forward */
+  .cap .lbl { font-size: 13px; font-weight: 700; letter-spacing: .18em; color: var(--cream); opacity: .92; }
+  .cap .big { font-family: 'Anton', sans-serif; font-size: 34px; line-height: 1.05; color: #ffd23e; }
+  .cap .big small { font-size: 16px; color: #ffd23e; opacity: .95; }
+
+  #cap-pos { top: 0; left: 22px; padding-bottom: 9px; }
+  #cap-score { top: 0; left: 50%; transform: translateX(-50%) skewX(-8deg); }
+  #cap-lap { top: 0; right: 22px; padding-bottom: 9px; text-align: right; }
+  #snd { top: 46px; }   /* below the LAP capsule — the corner belongs to the HUD */
+  #cap-boost { left: 0; bottom: 18px; padding-right: 34px; }
+  #cap-speed { right: 0; bottom: 18px; text-align: right; padding-left: 30px; }
+  #cap-speed .brand { font-family: 'Anton', sans-serif; font-size: 13px; color: var(--red);
+                      letter-spacing: .12em; opacity: .95; }
+  #cap-speed .brand small { color: var(--cream); font-size: 10px; letter-spacing: .2em; opacity: .85; }
+
+  /* earn-source chips (ONCOMING / DRIFT) light up while their earn is active */
+  #earn-chips { display: flex; gap: 8px; margin-bottom: 5px; }
+  #earn-chips span { font-size: 12px; font-weight: 700; letter-spacing: .16em; color: #7d8ba1; }
+  #earn-chips span.on { color: #ffd23e; text-shadow: 0 0 8px rgba(255, 210, 62, .6); }
+  #boostbar-out { display: block; width: 300px; height: 22px; border: 2px solid #0d1626;
+                  background: rgba(13, 22, 38, .75); margin-top: 2px; overflow: hidden;
+                  box-shadow: inset 0 0 0 1px rgba(255, 210, 62, .25); }
+  #boostbar { display: block; height: 100%; width: 0%;
+              background: linear-gradient(90deg, #ff5d3a, #ff8c42 40%, #ffd23e 80%, #fff3b0);
+              transition: width .06s linear; box-shadow: 0 0 10px rgba(255, 140, 66, .55); }
+  #boostbar.burn { background: linear-gradient(90deg, #fff3b0, #ffd23e 35%, #ff5d3a); }
+  #mult { position: absolute; right: -14px; top: 50%; margin-top: -12px; transform: skewX(8deg);
+          font-family: 'Anton', sans-serif; font-size: 20px; color: var(--cream);
+          background: #0d1626; border: 2px solid #ffd23e; padding: 1px 9px; }
+  #cap-boost { position: fixed; }
+  #cap-boost .lblrow { display: flex; align-items: center; gap: 10px; }
+
   #hud-bl { position: fixed; left: 20px; bottom: 16px; z-index: 5; display: none; color: var(--cream);
             text-shadow: 2px 2px 0 rgba(23,38,59,.85); user-select: none; }
-  #speed { font-family: 'Anton', sans-serif; font-size: 46px; line-height: 1; }
-  #speed small { font-size: 16px; opacity: .85; margin-left: 4px; letter-spacing: .08em; }
-  #boostwrap { margin-top: 7px; width: 190px; }
-  #boostwrap .lbl { font-family: 'Barlow Condensed', sans-serif; font-size: 12px; letter-spacing: .22em; opacity: .9; }
-  #boostbar-out { display: block; width: 190px; height: 14px; border: 2px solid var(--ink);
-                  background: rgba(23,38,59,.55); box-shadow: 2px 2px 0 rgba(23,38,59,.6); margin-top: 2px; }
-  #boostbar { display: block; height: 100%; width: 0%;
-              background: linear-gradient(90deg, #ff8c42, #ffd23e); transition: width .06s linear; }
-  #boostbar.burn { background: linear-gradient(90deg, #ff5d3a, #ffd23e, #fff3b0); }
-  #chain { font-family: 'Anton', sans-serif; font-size: 18px; color: #ffd23e; margin-top: 4px; display: none; }
 
   #hud-br { position: fixed; right: 20px; bottom: 16px; z-index: 5; display: none; text-align: right;
             color: var(--cream); text-shadow: 2px 2px 0 rgba(23,38,59,.85); user-select: none;
@@ -88,12 +115,21 @@
 <div class="hud arcade"><h1>SIGNAL NINE</h1><p id="hint">W/UP throttle &middot; S/DOWN brake &middot; A/D steer &middot; SHIFT boost &middot; SPACE drift &middot; R restart &middot; ESC pause</p></div>
 <button id="snd">Enable sound</button>
 
-<div id="hud-bl">
-  <div id="speed">0<small>MPH</small></div>
-  <div id="boostwrap">
-    <div class="lbl">BOOST</div>
+<!-- B3 corner capsules -->
+<div id="cap-pos" class="cap"><div><span class="lbl">POS</span>&nbsp; <span class="big" id="pos-big">1<small id="pos-of">/6</small></span></div></div>
+<div id="cap-score" class="cap"><div><span class="lbl">SCORE</span>&nbsp; <span class="big" id="score-big">0</span></div></div>
+<div id="cap-lap" class="cap"><div><span class="big" id="lap-big">1<small>/2</small></span>&nbsp; <span class="lbl">LAP</span></div></div>
+<div id="cap-boost" class="cap">
+  <div>
+    <div id="earn-chips"><span id="chip-oncoming">ONCOMING</span><span id="chip-drift">DRIFT</span></div>
+    <div class="lblrow"><span class="lbl">BOOST</span><span id="mult">&times;1</span></div>
     <span id="boostbar-out"><i id="boostbar"></i></span>
-    <div id="chain">BURNOUT &times;2</div>
+  </div>
+</div>
+<div id="cap-speed" class="cap">
+  <div>
+    <div class="brand">SIGNAL NINE <small>ARCADE</small></div>
+    <div class="big" id="speed-big">0<small> MPH</small></div>
   </div>
 </div>
 <div id="hud-br"><div id="carname">VANTORO RS</div><div id="raceinfo"></div></div>
