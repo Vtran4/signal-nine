@@ -1,0 +1,81 @@
+{
+  "generated_by": "build_rivals.py (Phase B rival finals)",
+  "units": "meters",
+  "note": "6-car grid additions: Warhawk 500 (muscle/Street) + Halberd F12 (flat-12 wedge/Super). Forward = glTF +Z after export. New slots: paint_warhawk, paint_halberd.",
+  "materials": [
+    "paint_warhawk",
+    "paint_halberd",
+    "glass",
+    "lights",
+    "lights_r",
+    "tire",
+    "rim",
+    "dark"
+  ],
+  "cars": [
+    {
+      "token": "warhawk",
+      "display_name": "Warhawk 500",
+      "tri_count": 3880,
+      "dims": {
+        "length": 4.9,
+        "width": 2.03,
+        "height": 1.35
+      },
+      "wheelbase": 2.8,
+      "track": 1.68,
+      "nodes": [
+        "warhawk_body",
+        "warhawk_bumper_f",
+        "warhawk_bumper_r",
+        "warhawk_glass",
+        "warhawk_hood",
+        "warhawk_interior",
+        "warhawk_lights_f",
+        "warhawk_lights_r",
+        "warhawk_rim_fl",
+        "warhawk_rim_fr",
+        "warhawk_rim_rl",
+        "warhawk_rim_rr",
+        "warhawk_roof",
+        "warhawk_spoiler",
+        "warhawk_wheel_fl",
+        "warhawk_wheel_fr",
+        "warhawk_wheel_rl",
+        "warhawk_wheel_rr"
+      ]
+    },
+    {
+      "token": "halberd",
+      "display_name": "Halberd F12",
+      "tri_count": 3904,
+      "dims": {
+        "length": 4.7,
+        "width": 2.18,
+        "height": 1.01
+      },
+      "wheelbase": 2.8,
+      "track": 1.76,
+      "nodes": [
+        "halberd_body",
+        "halberd_bumper_f",
+        "halberd_bumper_r",
+        "halberd_glass",
+        "halberd_hood",
+        "halberd_interior",
+        "halberd_lights_f",
+        "halberd_lights_r",
+        "halberd_rim_fl",
+        "halberd_rim_fr",
+        "halberd_rim_rl",
+        "halberd_rim_rr",
+        "halberd_roof",
+        "halberd_spoiler",
+        "halberd_wheel_fl",
+        "halberd_wheel_fr",
+        "halberd_wheel_rl",
+        "halberd_wheel_rr"
+      ]
+    }
+  ]
+}
