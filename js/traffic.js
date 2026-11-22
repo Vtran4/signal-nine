@@ -81,7 +81,10 @@ window.S9 = window.S9 || {};
 
     // Phase D (E5): 6-lane traffic — denser, spread across all same-direction
   // lanes and the outer oncoming lane; the inner oncoming lane stays lighter
-  // so the dodge line keeps a fair gap.
+  // so the dodge line keeps a fair gap. On 2.5m lanes the old 4-lane-era
+  // squeeze line (+0.5) OVERLAPS the +1.25 traffic (latGap goes negative —
+  // the bot rear-ends instead of squeezing); the B3-correct squeeze on wide
+  // roads is the inner oncoming lane, guarded by the oncoming-clearance check.
   #spawn(playerS, offsetHint) {
       const proto = this.protoPick();
       const dir = this.r() < 0.65 ? 1 : -1;                   // coastal highway: mostly with-traffic
@@ -146,6 +149,17 @@ window.S9 = window.S9 || {};
           this.cars.splice(i, 1);
           continue;
         }
+        // Phase D fix: matched-speed trailers deadlock the population — a
+        // with-direction car the player paces for >6s (|ds|<45) is recycled
+        // ahead so the oncoming/with mix keeps flowing
+        if (c.dir > 0 && Math.abs(ds) < 45 && Math.abs(c.speed - player.speed) < 6) {
+          c.pacedT = (c.pacedT || 0) + dt;
+          if (c.pacedT > 6) {
+            this.scene.remove(c.mesh);
+            this.cars.splice(i, 1);
+            continue;
+          }
+        } else c.pacedT = 0;
         const p = this.track.posAt(c.s, c.lane);
         c.mesh.position.copy(p);
         c.mesh.rotation.y = this.track.tangentYawAt(c.s) + (c.dir < 0 ? Math.PI : 0);
@@ -191,7 +205,7 @@ window.S9 = window.S9 || {};
       const parts = [], hulls = [];
       c.mesh.traverse((o) => {
         if (!o.isMesh || !o.name) return;
-        if (/wheel_|rim_/.test(o.name) || /bumper_f/.test(o.name)) parts.push(o);
+        if (/wheel_|rim_/.test(o.name) || /bumper_[fr]/.test(o.name) || /_hood$/.test(o.name) || /bedpanel/.test(o.name)) parts.push(o);
         else hulls.push(o);
       });
       for (const part of parts) {

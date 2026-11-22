@@ -15,12 +15,15 @@ window.S9 = window.S9 || {};
     }
 
     // scan a lane ahead of the player: nearest same-direction gap (m), that car,
-    // and nearest oncoming meeting TIME (s). Cars within 1.7m lateral count.
+    // and nearest oncoming meeting TIME (s). The lateral window covers the
+    // 6-lane cross-section a lane change sweeps through (2.5m lanes): any car
+    // within 1.9m of the scan lane counts — widened from the 4-lane-era 1.7.
     #scan(traffic, car, lane, speed) {
       const L = car.track.length;
       let minSame = 1e9, sameCar = null, minOppT = 1e9;
       for (const c of traffic.cars) {
-        if (Math.abs(c.lane - lane) > 1.7) continue;
+        if (c.wrecked) continue;                       // wrecks are obstacles, not traffic to dodge
+        if (Math.abs(c.lane - lane) > 1.9) continue;
         let ds = (c.s - car.s) % L;
         if (ds > L / 2) ds -= L; if (ds < -L / 2) ds += L;
         if (ds <= 2) continue;
@@ -98,6 +101,20 @@ window.S9 = window.S9 || {};
       const vComfort = kMax > 1e-4 ? Math.sqrt(22.0 / kMax) : car.cfg.topSpeed;
       let vTarget = Math.min(vComfort, car.cfg.topSpeed);
       if (target === laneR && !this.passing && R.sameCar && R.minSame < 30) vTarget = Math.min(vTarget, R.sameCar.speed - 1.0);
+      // Phase D: on the 2.5m 6-lane cross-section a lane change sweeps through
+      // a lane whose traffic the target-lane scan never sees — brake for ANY
+      // slow same-direction car within a half-lane of the car's CURRENT lateral
+      // and inside braking distance
+      let midSlow = null, midGap = 1e9;
+      for (const c of traffic.cars) {
+        if (c.dir < 0 || c.wrecked) continue;
+        const cds = wrap(c.s - car.s);
+        if (cds <= 2 || cds > 30 + speed * 0.9) continue;
+        if (Math.abs(c.lane - car.lateral) < 2.5 && c.speed < speed - 4) { midGap = Math.min(midGap, cds); midSlow = c; }
+      }
+      if (midSlow && midGap < 30 + speed * 0.9) {
+        vTarget = Math.min(vTarget, Math.max(midSlow.speed - 1.0, 6));
+      }
       // proportional braking (bang-bang from 106→17mph overshoots badly)
       const over = speed - vTarget;
       let throttle = 1, brake = 0;

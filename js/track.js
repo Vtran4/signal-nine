@@ -128,7 +128,10 @@ window.S9 = window.S9 || {};
       this.laneOffset = this.lanesWith[this.lanesWith.length - 1];  // traffic rides outer
       this.laneOncoming = this.lanesOpp[0];       // traffic oncoming = outer
       this.laneDodge = this.lanesOpp[this.lanesOpp.length - 1];     // bot dodge = inner oncoming
-      this.laneSqueeze = 0.5;                     // squeeze-pass line between lanes
+      // squeeze-pass line: on the 6-lane 2.5m cross-section the old +0.5 overlaps
+      // the +1.25 traffic (latGap negative → rear-end); the pass now uses the
+      // inner oncoming lane at −1.25 (guarded by oncoming clearance in bot.js)
+      this.laneSqueeze = (entry.roadWidth || 10) <= 8 ? 0.5 : -this.lanesOpp[this.lanesOpp.length - 1];
       // narrow-road flag: 2-lane mountain cuts (canyon) keep all racing in the
       // same-direction lanes — oncoming dodge is off, squeeze stays centered
       if ((entry.roadWidth || 10) <= 8) {

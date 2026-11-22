@@ -53,7 +53,7 @@ with sync_playwright() as p:
         print("SHOT:", shot(pg, "smoke_main"))
         # fx off — the post stack disabled must also boot clean (?fx=0 isolates it)
         pg2, errors2 = new_page(ctx)
-        pg2.goto(f"http://127.0.0.1:{PORT}/index.html?lockres&fx=0&auto=1&state=drive&t=8")
+        pg2.goto(f"http://127.0.0.1:{PORT}/index.html?lockres&fx=0&auto=1&state=drive")
         try:
             wait_ready(pg2)
         except Exception as e:
