@@ -44,7 +44,7 @@ def pbr(name, color, metallic=0.0, rough=0.8):
 
 MAT = {
     "road":   pbr("road",   (0.42, 0.42, 0.44)),
-    "terrain": pbr("terrain", (0.62, 0.52, 0.30)),
+    "terrain": pbr("terrain", (0.47, 0.40, 0.25)),
     "ocean":  pbr("ocean",  (0.05, 0.22, 0.45), 0.0, 0.25),
     "metal":  pbr("metal",  (0.65, 0.67, 0.70), 0.6, 0.45),
     "white":  pbr("white",  (0.85, 0.85, 0.82)),
@@ -52,8 +52,8 @@ MAT = {
     "signal_red": pbr("signal_red", (0.80, 0.08, 0.06), 0.0, 0.4),
     "signal_amber": pbr("signal_amber", (0.85, 0.55, 0.05), 0.0, 0.4),
     "signal_green": pbr("signal_green", (0.10, 0.60, 0.15), 0.0, 0.4),
-    "concrete": pbr("concrete", (0.55, 0.54, 0.52)),
-    "building": pbr("building", (0.50, 0.48, 0.46)),
+    "concrete": pbr("concrete", (0.46, 0.46, 0.45)),
+    "building": pbr("building", (0.42, 0.40, 0.39)),
     "dark":   pbr("dark",   (0.10, 0.10, 0.12)),
     "paint_white": pbr("paint_white", (0.82, 0.82, 0.80), 0.0, 0.6),
     "paint_yellow": pbr("paint_yellow", (0.82, 0.62, 0.10), 0.0, 0.6),
@@ -62,6 +62,80 @@ MAT = {
 
 BUILDING_TONES = [(0.50, 0.48, 0.46), (0.42, 0.40, 0.44), (0.55, 0.48, 0.38),
                   (0.36, 0.38, 0.42), (0.58, 0.52, 0.50), (0.30, 0.31, 0.34)]
+
+def grade_asphalt(mat, wear_us):
+    """In-bake texture grading: noise-mottled cool-grey asphalt + UV-driven
+    wheel-path wear strips at the lane centers + fine bump grain (the LIGHT
+    bake picks the grain up as baked relief). Zero engine changes."""
+    nt = mat.node_tree
+    b = nt.nodes.get("Principled BSDF")
+    tex = nt.nodes.new("ShaderNodeTexCoord")
+    sep = nt.nodes.new("ShaderNodeSeparateXYZ")
+    noise = nt.nodes.new("ShaderNodeTexNoise")
+    noise.inputs["Scale"].default_value = 0.5
+    noise.inputs["Detail"].default_value = 6.0
+    ramp_n = nt.nodes.new("ShaderNodeValToRGB")
+    ramp_n.color_ramp.elements[0].color = (0.24, 0.25, 0.28, 1.0)
+    ramp_n.color_ramp.elements[1].color = (0.40, 0.41, 0.44, 1.0)
+    nt.links.new(tex.outputs["Object"], noise.inputs["Vector"])
+    nt.links.new(noise.outputs["Fac"], ramp_n.inputs["Fac"])
+    mult = nt.nodes.new("ShaderNodeMixRGB")
+    mult.blend_type = "MULTIPLY"
+    mult.inputs["Fac"].default_value = 1.0
+    mult.inputs["Color1"].default_value = (0.33, 0.34, 0.37, 1.0)
+    if wear_us:
+        wear = nt.nodes.new("ShaderNodeValToRGB")
+        wr = wear.color_ramp
+        wr.elements[0].position = 0.0
+        wr.elements[0].color = (1.0, 1.0, 1.0, 1.0)
+        wr.elements[1].position = 1.0
+        wr.elements[1].color = (1.0, 1.0, 1.0, 1.0)
+        for u in wear_us:
+            e1 = wr.elements.new(max(0.001, u - 0.05))
+            e1.color = (0.60, 0.61, 0.65, 1.0)
+            e2 = wr.elements.new(u)
+            e2.color = (0.52, 0.53, 0.57, 1.0)
+            e3 = wr.elements.new(min(0.999, u + 0.05))
+            e3.color = (0.60, 0.61, 0.65, 1.0)
+        sep2 = nt.nodes.new("ShaderNodeSeparateXYZ")
+        nt.links.new(tex.outputs["UV"], sep2.inputs[0])
+        nt.links.new(sep2.outputs["X"], wear.inputs["Fac"])
+        nt.links.new(ramp_n.outputs["Color"], mult.inputs["Color1"])
+        nt.links.new(wear.outputs["Color"], mult.inputs["Color2"])
+    else:
+        nt.links.new(ramp_n.outputs["Color"], mult.inputs["Color1"])
+    nt.links.new(mult.outputs["Color"], b.inputs["Base Color"])
+    noise2 = nt.nodes.new("ShaderNodeTexNoise")
+    noise2.inputs["Scale"].default_value = 60.0
+    bump = nt.nodes.new("ShaderNodeBump")
+    bump.inputs["Strength"].default_value = 0.18
+    nt.links.new(tex.outputs["Object"], noise2.inputs["Vector"])
+    nt.links.new(noise2.outputs["Fac"], bump.inputs["Height"])
+    nt.links.new(bump.outputs["Normal"], b.inputs["Normal"])
+
+def grade_surface(mat, mottle_scale=14.0, dark=(0.85, 0.85, 0.85)):
+    """Noise mottle multiplier for terrain-style surfaces (object-space)."""
+    nt = mat.node_tree
+    b = nt.nodes.get("Principled BSDF")
+    tex = nt.nodes.new("ShaderNodeTexCoord")
+    noise = nt.nodes.new("ShaderNodeTexNoise")
+    noise.inputs["Scale"].default_value = mottle_scale
+    noise.inputs["Detail"].default_value = 5.0
+    nt.links.new(tex.outputs["Object"], noise.inputs["Vector"])
+    ramp = nt.nodes.new("ShaderNodeValToRGB")
+    ramp.color_ramp.elements[0].color = (*dark, 1.0)
+    ramp.color_ramp.elements[1].color = (1.0, 1.0, 1.0, 1.0)
+    nt.links.new(noise.outputs["Fac"], ramp.inputs["Fac"])
+    mult = nt.nodes.new("ShaderNodeMixRGB")
+    mult.blend_type = "MULTIPLY"
+    mult.inputs["Fac"].default_value = 1.0
+    mult.inputs["Color1"].default_value = tuple(b.inputs["Base Color"].default_value)[:3] + (1.0,)
+    nt.links.new(ramp.outputs["Color"], mult.inputs["Color2"])
+    nt.links.new(mult.outputs["Color"], b.inputs["Base Color"])
+
+grade_asphalt(MAT["road"], [0.083, 0.25, 0.417, 0.583, 0.75, 0.917])
+grade_surface(MAT["terrain"], mottle_scale=14.0, dark=(0.80, 0.78, 0.74))
+grade_surface(MAT["concrete"], mottle_scale=10.0, dark=(0.88, 0.88, 0.86))
 
 # ---------------- mesh helpers ----------------
 def mesh_from(name, verts, faces, mat, location=(0, 0, 0)):

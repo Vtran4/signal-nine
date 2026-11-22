@@ -14,6 +14,7 @@ window.S9 = window.S9 || {};
       this.bot = null;
       this.boostEase = 0;
       this.raceScore = 0;
+      this.driveLap = 0;      // free-drive lap counter (resets on run start)
       this.keys = {};
       this.gp = { throttle: 0, brake: 0, steer: 0, boost: false, drift: false };
       this.best = this.#loadBest();
@@ -105,6 +106,7 @@ window.S9 = window.S9 || {};
     // ---------- flow ----------
     startRun() {
       this.cleanupRace();
+      this.driveLap = 0; this.drivePrevS = undefined;
       const car = this.car;
       car.s = 30; car.lateral = this.track.laneOffset; car.speed = 0;
       car.heading = this.track.tangentYawAt(30); car.slip = 0;
@@ -481,10 +483,13 @@ window.S9 = window.S9 || {};
       if (this.mode !== 'drive' && this.mode !== 'race') return;
       const inRace = this.mode === 'race' && this.race;
       const r = inRace ? this.race : null;
-      // corner capsule visibility: POS+SCORE+LAP race-only; SPEED+BOOST always
-      const showPos = !!r, showLap = !!r && this.track.closed;
+      // corner capsules: SPEED+BOOST always; SCORE+LAP in every driving mode
+      // (B3 shows them everywhere — free drive gets a live score and lap
+      // count too); POS needs a field, so it is race-only
+      const showPos = !!r;
+      const showLap = this.track.closed;
       this.hud.capPos.style.display = showPos ? 'block' : 'none';
-      this.hud.capScore.style.display = showPos ? 'block' : 'none';
+      this.hud.capScore.style.display = 'block';
       this.hud.capLap.style.display = showLap ? 'block' : 'none';
       this.hud.capBoost.style.display = 'block';
       this.hud.capSpeed.style.display = 'block';
@@ -494,19 +499,33 @@ window.S9 = window.S9 || {};
       const b = this.car.boost;
       this.hud.bar.style.width = (b.meter * 100).toFixed(1) + '%';
       this.hud.bar.classList.toggle('burn', b.active);
-      const mult = 1 + (b.active ? b.chain : Math.max(0, b.chain - (b.active ? 0 : 1)));
       this.hud.mult.textContent = '×' + Math.max(1, b.active ? b.chain + 1 : 1);
       // earn-source chips: lit while that earn channel is paying out
       this.hud.chipOncoming.classList.toggle('on',
         this.car.lateral < (this.track.oncomingEdge !== undefined ? this.track.oncomingEdge : -1.2) && this.car.speed > 12 && !this.car.crashed);
       this.hud.chipDrift.classList.toggle('on', this.car.drifting && this.car.speed > S9.CFG.boost.driftMinSpeed);
-      // race corners
+      // score: race = full economy incl. takedowns; free drive = the same
+      // near-miss/drift/oncoming economy so the capsule is never dead
+      const st = this.car.stats;
       if (r) {
         this.hud.posBig.innerHTML = (r.state === 'countdown' ? '–' : r.playerPos) + '<small id="pos-of">/' + (r.rivals.length + 1) + '</small>';
         this.hud.scoreBig.textContent = Math.round(r.score || 0);
-        if (showLap) this.hud.lapBig.innerHTML = Math.min(r.laps, r.lapCount[0] + 1) + '<small>/' + r.laps + '</small>';
       } else {
-        this.hud.scoreBig.textContent = Math.round(this.car.stats.topMph || 0) + '';
+        this.hud.scoreBig.textContent = Math.round(st.nearMisses * 150 + st.driftTime * 50 + st.oncomingTime * 25);
+      }
+      // lap counting: race uses the Race controller; free drive counts wraps
+      if (showLap) {
+        let lapNow;
+        if (r) lapNow = Math.min(r.laps, r.lapCount[0] + 1);
+        else {
+          lapNow = this.driveLap + 1;
+          if (this.drivePrevS === undefined) this.drivePrevS = this.car.s;
+          const L = this.track.length;
+          if (this.drivePrevS - this.car.s > L * 0.5) this.driveLap++;
+          this.drivePrevS = this.car.s;
+          lapNow = Math.min(2, this.driveLap + 1);
+        }
+        this.hud.lapBig.innerHTML = lapNow + '<small>/2</small>';
       }
       // legacy raceinfo line kept for debug probes
       if (r) {
