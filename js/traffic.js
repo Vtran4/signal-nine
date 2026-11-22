@@ -51,6 +51,7 @@ window.S9 = window.S9 || {};
       this.r = rng(seed ^ 0x51f7);
       this.cfg = S9.CFG.traffic;
       this.cars = [];
+      this.debrisRef = null;   // set by game: shared debris list
       this.events = [];   // {type:'nearmiss', relSpeed, heavy}
       if (gltf) {
         // glb prototypes: node names are `<type>_*` (hierarchical under <type>_body)
@@ -115,6 +116,16 @@ window.S9 = window.S9 || {};
       while (this.cars.length < this.cfg.density) this.#spawn(player.s, this.r.range(window1 * 0.5, window1));
       for (let i = this.cars.length - 1; i >= 0; i--) {
         const c = this.cars[i];
+        // Phase E4: wrecked heavies sit in the road as obstacles, decaying to a stop
+        if (c.wrecked) {
+          c.speed = Math.max(0, c.speed - 22 * dt);
+          c.s = this.track.closed
+            ? (c.s + c.dir * c.speed * dt + L) % L
+            : c.s + c.dir * c.speed * dt;
+          c.cool = Math.max(0, c.cool - dt);
+          if (c.grazeCool > 0) c.grazeCool -= dt;
+          continue;
+        }
         c.s = this.track.closed
           ? (c.s + c.dir * c.speed * dt + L) % L
           : c.s + c.dir * c.speed * dt;
@@ -158,6 +169,54 @@ window.S9 = window.S9 || {};
               player.speed <= 18 ? 'mph' : '?',
           };
         }
+      }
+    }
+
+    // Phase E4 extension: heavy traffic (bus/semi) shatters when slammed —
+    // detach the seams the contract ships (bumper + wheels), crumple the
+    // single-piece body, and leave the wreck parked in the road.
+    shatterHeavy(c) {
+      if (c.wrecked) return;
+      c.wrecked = true;
+      c.speed = Math.max(c.speed, 4);
+      const parts = [], hulls = [];
+      c.mesh.traverse((o) => {
+        if (!o.isMesh || !o.name) return;
+        if (/wheel_|rim_/.test(o.name) || /bumper_f/.test(o.name)) parts.push(o);
+        else hulls.push(o);
+      });
+      for (const part of parts) {
+        const wp = new THREE.Vector3(), wq = new THREE.Quaternion(), ws = new THREE.Vector3();
+        part.getWorldPosition(wp); part.getWorldQuaternion(wq); part.getWorldScale(ws);
+        const world = new THREE.Mesh(part.geometry, part.material);
+        world.name = 'debris_' + part.name;
+        world.position.copy(wp); world.quaternion.copy(wq); world.scale.copy(ws);
+        world.userData.debris = {
+          vel: new THREE.Vector3((Math.random() - 0.5) * 8, 2.5 + Math.random() * 3.5, c.dir * (3 + Math.random() * 4)),
+          spin: new THREE.Vector3((Math.random() - 0.5) * 12, (Math.random() - 0.5) * 12, (Math.random() - 0.5) * 12),
+          life: 3.2 + Math.random(),
+          bounce: 0,
+        };
+        this.scene.add(world);
+        this.debrisRef.push(world);
+        if (part.parent) part.parent.remove(part);
+      }
+      // E4.5 smashed metal on the single-piece body — bigger dents on a bus
+      const jitterMap = {};
+      for (const hull of hulls) {
+        const geo = hull.geometry;
+        if (!geo || !geo.attributes.position) continue;
+        const pos = geo.attributes.position, nrm = geo.attributes.normal;
+        for (let i = 0; i < pos.count; i++) {
+          const key = Math.round(pos.getX(i) * 100) + ',' + Math.round(pos.getY(i) * 100) + ',' + Math.round(pos.getZ(i) * 100);
+          if (!(key in jitterMap)) jitterMap[key] = (Math.random() - 0.5) * 0.22;
+          const d = jitterMap[key];
+          if (nrm) pos.setXYZ(i, pos.getX(i) + nrm.getX(i) * d, pos.getY(i) + nrm.getY(i) * d * 0.5, pos.getZ(i) + nrm.getZ(i) * d);
+          else pos.setY(i, pos.getY(i) + d);
+        }
+        pos.needsUpdate = true;
+        geo.computeVertexNormals();
+        hull.scale.y *= 0.93;
       }
     }
   }

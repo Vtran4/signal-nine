@@ -158,6 +158,7 @@ window.S9 = window.S9 || {};
     window.__assetFlags = { glbCar: !!car.isGlb, glbTrack: !!track.hasGlbStatics, pano: !!envTex, data: !!entry };
 
     const traffic = new S9.Traffic(scene, track, P.seed, trafficGltf);
+    traffic.debrisRef = null; // set on the game below once the shared list exists
     traffic.spawnInitial(car.s);
     car.track.trafficRef = traffic; // bot lane checks
 
@@ -165,6 +166,7 @@ window.S9 = window.S9 || {};
     const speedfx = new S9.SpeedFX(renderer, scene, camera, P.fx);
     const audio = new S9.AudioSet();
     const game = new S9.Game({ scene, camera, renderer, track, car, traffic, physics, speedfx, audio, assets: { carsGltf, trafficGltf, rivalsGltf } });
+    traffic.debrisRef = game.debris;   // traffic shatters feed the shared debris engine
     if (P.auto) game.bot = new S9.Bot();
 
     // state jump from URL (?state=)

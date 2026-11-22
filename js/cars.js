@@ -309,9 +309,11 @@ window.S9 = window.S9 || {};
       this.shattered = true;
       const vel = new THREE.Vector3(Math.sin(this.heading), 0, Math.cos(this.heading)).multiplyScalar(this.speed * 0.35);
       const parts = [];
+      const hulls = [];
       this.mesh.traverse((o) => {
         if (!o.isMesh || !o.name) return;
         if (/bumper_f|bumper_r|hood|spoiler/.test(o.name) || /wheel_|rim_/.test(o.name)) parts.push(o);
+        else hulls.push(o);   // body/glass/roof — the smashed-metal pass
       });
       for (const part of parts) {
         const wp = new THREE.Vector3(), wq = new THREE.Quaternion(), ws = new THREE.Vector3();
@@ -332,6 +334,26 @@ window.S9 = window.S9 || {};
       }
       for (const part of parts) {
         if (part.parent) part.parent.remove(part);
+      }
+      // Phase E4.5: smashed metal — crumple the remaining hull. Position-keyed
+      // jitter (shared vertices move together, no tearing) + a slight crush
+      // squash along the impact axis.
+      const jitterMap = {};
+      for (const hull of hulls) {
+        const geo = hull.geometry;
+        if (!geo || !geo.attributes.position) continue;
+        const pos = geo.attributes.position, nrm = geo.attributes.normal;
+        for (let i = 0; i < pos.count; i++) {
+          const key = Math.round(pos.getX(i) * 100) + ',' + Math.round(pos.getY(i) * 100) + ',' + Math.round(pos.getZ(i) * 100);
+          if (!(key in jitterMap)) jitterMap[key] = (Math.random() - 0.5) * 0.16;
+          const d = jitterMap[key];
+          if (nrm) {
+            pos.setXYZ(i, pos.getX(i) + nrm.getX(i) * d, pos.getY(i) + nrm.getY(i) * d * 0.6, pos.getZ(i) + nrm.getZ(i) * d);
+          } else pos.setY(i, pos.getY(i) + d);
+        }
+        pos.needsUpdate = true;
+        geo.computeVertexNormals();
+        hull.scale.y *= 0.9;   // crush squash — the wreck sits lower
       }
     }
 

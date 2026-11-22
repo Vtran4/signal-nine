@@ -83,7 +83,7 @@ window.S9 = window.S9 || {};
         if (Math.abs(closing) > S9.CFG.physics.crashRelSpeed) {
           const p = car.mesh.position;
           this.sparks.burst(p, 34, 9);
-          events.push({ type: 'crash', heavy: c.t.mass >= 1.6 });
+          events.push({ type: 'crash', heavy: c.t.mass >= 1.6, traffic: c });
         } else {
           // graze tolerance: scrub ONCE per contact, not per overlap frame
           if (!(c.grazeCool > 0)) {

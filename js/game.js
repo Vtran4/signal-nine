@@ -356,6 +356,8 @@ window.S9 = window.S9 || {};
                 this.physics.slowMo(0.7, 0.3);
                 showEvent('CRASHED', true);
               }
+              // E4 extension: heavy traffic shatters into debris when slammed
+              if (h.traffic && h.traffic.t.mass >= 2.4) this.traffic.shatterHeavy(h.traffic);
             } else if (h.type === 'graze') {
               this.audio.fire('wall');
             }
