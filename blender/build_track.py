@@ -284,11 +284,11 @@ def build_road_paint(name_w, name_y, S, LEFT, closed, skip_fn):
                 idxs = idxs + [n]
             emit(verts, faces, idxs, lat, width)
     vw, fw = [], []
-    solid(vw, fw, 4.7, 0.12)
-    solid(vw, fw, -4.7, 0.12)
+    solid(vw, fw, HW - 0.3, 0.14)
+    solid(vw, fw, -(HW - 0.3), 0.14)
     for run in all_runs(lambda i: allowed(i) and (i % 9) < 2):
-        emit(vw, fw, run, 2.4, 0.14)
-        emit(vw, fw, run, -2.4, 0.14)
+        for lat in (-5.0, -2.5, 2.5, 5.0):
+            emit(vw, fw, run, lat, 0.14)
     mesh_from(name_w, vw, fw, MAT["paint_white"])
     vy, fy = [], []
     solid(vy, fy, 0.16, 0.10)
@@ -303,7 +303,8 @@ CTRL_COASTAL = [(620, -420, 26), (640, -140, 28), (660, 140, 30), (620, 380, 32)
                 (-420, 300, 52), (-500, 80, 48), (-420, -100, 42), (-300, -260, 38),
                 (-140, -380, 34), (60, -460, 28), (280, -500, 24), (480, -480, 24)]
 
-HW = 5.0  # roadWidth 10
+RW = 15.0  # roadWidth 15 (B3-grade: 6 lanes @ 2.5 m) — all lateral offsets derive from this
+HW = RW / 2
 S = resample_closed(dense_closed(CTRL_COASTAL), SPACING)
 N = len(S)
 TRACK_LEN_COASTAL = N * SPACING
@@ -391,7 +392,7 @@ def guard_runs():
     for z in merged:
         if len(z) >= 8:
             cz = sum(cross_z(TAN[(i - 1) % N], TAN[(i + 1) % N]) for i in z)
-            runs.append((z, -6.0 if cz > 0 else 6.0))
+            runs.append((z, -(HW + 1.0) if cz > 0 else HW + 1.0))
             guarded.update(z)
     cliff, allz = [], []
     for i in range(N):
@@ -404,7 +405,7 @@ def guard_runs():
     if len(cliff) >= 8:
         allz.append(cliff)
     for z in allz:
-        runs.append((z, -6.0))
+        runs.append((z, -(HW + 1.0)))
     counts = {"full": 0, "lod1": 0, "lod2": 0}
     for z, outer in runs:
         s0 = z[0] * SPACING
@@ -437,7 +438,7 @@ def poles():
     count = 0
     for k, i in enumerate(range(0, N, 60)):
         p, l = S[i], LEFT[i]
-        side = 6.6 if k % 2 == 0 else -6.6
+        side = (HW + 1.6) if k % 2 == 0 else -(HW + 1.6)
         px, py = p[0] + l[0] * side, p[1] + l[1] * side
         name = "props_pole_" + pad(i * SPACING)
         ring_prism(name, px, py, p[2], p[2] + 7.2, 0.12, 12, MAT["metal"])
@@ -476,7 +477,7 @@ def signs():
     picked.sort()
     for i in picked:
         c = cross_z(TAN[(i - 1) % N], TAN[(i + 1) % N])
-        outer = -7.8 if c > 0 else 7.8
+        outer = -(HW + 2.8) if c > 0 else HW + 2.8
         p, l = S[i], LEFT[i]
         px, py = p[0] + l[0] * outer, p[1] + l[1] * outer
         yaw = math.atan2(TAN[i][1], TAN[i][0])
@@ -501,10 +502,10 @@ def gantry():
     p, l = S[0], LEFT[0]
     yaw = math.atan2(TAN[0][1], TAN[0][0])
     verts, faces = [], []
-    for side in (-6.8, 6.8):
+    for side in (-(HW + 1.8), HW + 1.8):
         add_box_verts(verts, faces, (0.5, 0.5, 6.8),
                       (p[0] + l[0] * side, p[1] + l[1] * side, p[2] + 3.4), yaw)
-    add_box_verts(verts, faces, (14.4, 0.45, 0.5), (p[0], p[1], p[2] + 6.9), yaw)
+    add_box_verts(verts, faces, (2 * HW + 4.4, 0.45, 0.5), (p[0], p[1], p[2] + 6.9), yaw)
     add_box_verts(verts, faces, (8.0, 0.15, 1.7), (p[0], p[1] - 0.4, p[2] + 5.7), yaw)
     mesh_from("props_gantry_start", verts, faces, MAT["metal"])
     furniture.append({"type": "gantry", "s": 0.0, "lateral": 0.0,
@@ -593,7 +594,7 @@ def build_junctions():
         p, l, t = S2[si], L2[si], T2[si]
         yaw = math.atan2(t[1], t[0])
         verts, faces = [], []
-        add_box_verts(verts, faces, (10.0, arm, 0.05), (p[0], p[1], p[2] + 0.03), yaw)
+        add_box_verts(verts, faces, (RW, arm, 0.05), (p[0], p[1], p[2] + 0.03), yaw)
         mesh_from("downtown_cross_" + pad(sj), verts, faces, MAT["road"])
         junctions.append({"s": round(sj, 1), "lateral": 0.0, "arm": round(arm, 1)})
         for band in (si - int((HW + 1.5) / SPACING), si + int((HW + 1.5) / SPACING)):
@@ -603,7 +604,7 @@ def build_junctions():
             for k in range(5):
                 bi = max(0, min(N2 - 1, band + (k - 2)))
                 bp = S2[bi]
-                add_box_verts(cv, cf, (0.6, 10.0, 0.02), (bp[0], bp[1], bp[2] + 0.02), yaw)
+                add_box_verts(cv, cf, (0.6, RW, 0.02), (bp[0], bp[1], bp[2] + 0.02), yaw)
             mesh_from("props_dt_crosswalk_" + pad(band * SPACING), cv, cf, MAT["white"])
         for corner in (1, -1):
             cx = p[0] + (l[0] * (HW + 2.5) + t[0] * (HW + 2.5)) * corner
@@ -769,10 +770,10 @@ def gantry_dt():
     p, l, t = S2[0], L2[0], T2[0]
     yaw = math.atan2(t[1], t[0])
     verts, faces = [], []
-    for side in (-6.8, 6.8):
+    for side in (-(HW + 1.8), HW + 1.8):
         add_box_verts(verts, faces, (0.5, 0.5, 6.8),
                       (p[0] + l[0] * side, p[1] + l[1] * side, p[2] + 3.4), yaw)
-    add_box_verts(verts, faces, (14.4, 0.45, 0.5), (p[0], p[1], p[2] + 6.9), yaw)
+    add_box_verts(verts, faces, (2 * HW + 4.4, 0.45, 0.5), (p[0], p[1], p[2] + 6.9), yaw)
     add_box_verts(verts, faces, (8.0, 0.15, 1.7), (p[0], p[1] - 0.4, p[2] + 5.7), yaw)
     mesh_from("props_dt_gantry_start", verts, faces, MAT["metal"])
     furniture_dt.append({"type": "gantry", "s": 0.0, "lateral": 0.0,
@@ -880,7 +881,7 @@ def cn_guard_runs():
     for z in merged:
         if len(z) >= 8:
             cz = sum(cross_z(T3[(i - 1) % N3], T3[(i + 1) % N3]) for i in z)
-            runs.append((z, -6.0 if cz > 0 else 6.0))
+            runs.append((z, -(HW + 1.0) if cz > 0 else HW + 1.0))
             guarded.update(z)
     rim, allr = [], []
     for i in range(N3):
@@ -893,7 +894,7 @@ def cn_guard_runs():
     if len(rim) >= 8:
         allr.append(rim)
     for z in allr:
-        runs.append((z, -6.0))
+        runs.append((z, -(HW + 1.0)))
     counts = {"full": 0, "lod1": 0, "lod2": 0}
     for z, outer in runs:
         s0 = z[0] * SPACING
@@ -942,7 +943,7 @@ def cn_signs():
     picked.sort()
     for i in picked:
         c = cross_z(T3[(i - 1) % N3], T3[(i + 1) % N3])
-        outer = -7.8 if c > 0 else 7.8
+        outer = -(HW + 2.8) if c > 0 else HW + 2.8
         p, l = S3[i], L3[i]
         px, py = p[0] + l[0] * outer, p[1] + l[1] * outer
         yaw = math.atan2(T3[i][1], T3[i][0])
@@ -967,10 +968,10 @@ def gantry_cn():
     p, l = S3[0], L3[0]
     yaw = math.atan2(T3[0][1], T3[0][0])
     verts, faces = [], []
-    for side in (-6.8, 6.8):
+    for side in (-(HW + 1.8), HW + 1.8):
         add_box_verts(verts, faces, (0.5, 0.5, 6.8),
                       (p[0] + l[0] * side, p[1] + l[1] * side, p[2] + 3.4), yaw)
-    add_box_verts(verts, faces, (14.4, 0.45, 0.5), (p[0], p[1], p[2] + 6.9), yaw)
+    add_box_verts(verts, faces, (2 * HW + 4.4, 0.45, 0.5), (p[0], p[1], p[2] + 6.9), yaw)
     add_box_verts(verts, faces, (8.0, 0.15, 1.7), (p[0], p[1] - 0.4, p[2] + 5.7), yaw)
     mesh_from("props_cn_gantry_start", verts, faces, MAT["metal"])
     furniture_cn.append({"type": "gantry", "s": 0.0, "lateral": 0.0,
@@ -981,7 +982,7 @@ def rocks_cn():
         i = random.randrange(0, N3)
         p, l = S3[i], L3[i]
         side = random.choice((-1, 1))
-        lat = side * random.uniform(18.0, 46.0)
+        lat = side * random.uniform(HW + 10.5, HW + 38.5)
         bx, by = p[0] + l[0] * lat, p[1] + l[1] * lat
         try:
             bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=1, radius=1.0,
@@ -1038,15 +1039,15 @@ def to_gltf_axes(p):
 data = {"tracks": [
     {"id": "coastal", "name": "Coastal Circuit", "closed": True,
      "centerline": [to_gltf_axes(p) for p in S],
-     "roadWidth": 10.0, "lanes": [-3.6, -1.2, 1.2, 3.6],
+     "roadWidth": 15.0, "lanes": [-6.25, -3.75, -1.25, 1.25, 3.75, 6.25],
      "furniture": coastal_furniture, "junctions": []},
     {"id": "downtown", "name": "Downtown Sprint", "closed": False,
      "centerline": [to_gltf_axes(p) for p in S2],
-     "roadWidth": 10.0, "lanes": [-3.6, -1.2, 1.2, 3.6],
+     "roadWidth": 15.0, "lanes": [-6.25, -3.75, -1.25, 1.25, 3.75, 6.25],
      "furniture": furniture_dt, "junctions": junctions},
     {"id": "canyon", "name": "Canyon Circuit", "closed": True,
      "centerline": [to_gltf_axes(p) for p in S3],
-     "roadWidth": 10.0, "lanes": [-3.6, -1.2, 1.2, 3.6],
+     "roadWidth": 15.0, "lanes": [-6.25, -3.75, -1.25, 1.25, 3.75, 6.25],
      "furniture": furniture_cn, "junctions": []},
 ]}
 json_path = os.path.join(ASSETS, "tracks_data.json")

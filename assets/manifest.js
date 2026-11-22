@@ -80,11 +80,17 @@ window.__S9_MANIFEST = {
         "props_cn_guard_2792_lod1",
         "props_cn_guard_2792_lod2",
         "props_cn_sign_chevron_0488",
+        "props_cn_sign_chevron_0488_stripes",
         "props_cn_sign_chevron_0734",
+        "props_cn_sign_chevron_0734_stripes",
         "props_cn_sign_chevron_0982",
+        "props_cn_sign_chevron_0982_stripes",
         "props_cn_sign_chevron_2004",
+        "props_cn_sign_chevron_2004_stripes",
         "props_cn_sign_chevron_2136",
+        "props_cn_sign_chevron_2136_stripes",
         "props_cn_sign_chevron_2802",
+        "props_cn_sign_chevron_2802_stripes",
         "props_dt_crosswalk_0294",
         "props_dt_crosswalk_0306",
         "props_dt_crosswalk_0896",
@@ -352,8 +358,11 @@ window.__S9_MANIFEST = {
         "props_pole_3600_lod1",
         "props_pole_3600_lod2",
         "props_sign_chevron_0002",
+        "props_sign_chevron_0002_stripes",
         "props_sign_chevron_2298",
-        "props_sign_chevron_3662"
+        "props_sign_chevron_2298_stripes",
+        "props_sign_chevron_3662",
+        "props_sign_chevron_3662_stripes"
       ]
     },
     "downtown": {
