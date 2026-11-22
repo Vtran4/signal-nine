@@ -102,6 +102,12 @@
                   color: var(--cream); background: var(--ink); border: 2px solid var(--ink);
                   border-radius: 2px; cursor: pointer; }
   .panel button:hover { background: var(--sun); border-color: var(--ink); color: var(--ink); }
+  #track-row { display: flex; gap: 8px; justify-content: center; margin: 4px 0 2px; }
+  #track-row .trk { display: inline-block; width: auto; margin: 0; padding: 7px 14px;
+                    font-family: 'Barlow Condensed', sans-serif; font-size: 13px; letter-spacing: .12em;
+                    color: var(--ink); background: transparent; border: 2px solid var(--ink); cursor: pointer; }
+  #track-row .trk:hover { background: var(--sun); }
+  #track-row .trk.on { background: var(--ink); color: var(--cream); }
   #menu-art { width: 320px; height: 10px; margin: 0 auto 18px;
               background: linear-gradient(90deg, var(--sky), var(--sun) 60%, var(--gold)); }
 
@@ -141,6 +147,13 @@
     <div id="menu-art"></div>
     <p class="sub">arcade street racer &mdash; speed is earned by danger</p>
     <button id="btn-play">Start run</button>
+    <button id="btn-race">Start race &mdash; 6 cars</button>
+    <button id="btn-crash">Crash junction</button>
+    <div id="track-row">
+      <button class="trk" data-track="coastal">COASTAL</button>
+      <button class="trk" data-track="downtown">DOWNTOWN</button>
+      <button class="trk" data-track="canyon">CANYON</button>
+    </div>
     <p class="sub" id="menu-best">No run yet today</p>
   </div>
 </div>

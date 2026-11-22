@@ -62,6 +62,19 @@ window.S9 = window.S9 || {};
       addEventListener('keyup', (e) => { this.keys[e.code] = false; });
       const b = (id, fn) => document.getElementById(id).addEventListener('click', fn);
       b('btn-play', () => this.startRun());
+      b('btn-race', () => this.startRace());
+      b('btn-crash', () => this.startCrash(0));
+      // track chips: set the ?track param and reload — the boot assembles the
+      // whole world from it, so a fresh load is the safe switch
+      const params = new URLSearchParams(location.search);
+      const curTrack = params.get('track') || 'coastal';
+      document.querySelectorAll('#track-row .trk').forEach((el) => {
+        el.classList.toggle('on', el.dataset.track === curTrack);
+        el.addEventListener('click', () => {
+          params.set('track', el.dataset.track);
+          location.search = params.toString();
+        });
+      });
       b('btn-resume', () => this.togglePause());
       b('btn-restart', () => { this.togglePause(); this.startRun(); });
       b('btn-quit', () => { this.togglePause(); this.toAttract(); });
