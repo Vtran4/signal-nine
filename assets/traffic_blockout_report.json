@@ -14,7 +14,7 @@
   "vehicles": [
     {
       "type": "civ_sedan",
-      "tri_count": 296,
+      "tri_count": 320,
       "dims": {
         "length": 4.8,
         "width": 1.85,
@@ -31,8 +31,10 @@
         "sedan_antenna",
         "sedan_body",
         "sedan_bumper_f",
+        "sedan_bumper_r",
         "sedan_exhaust",
         "sedan_glass",
+        "sedan_hood",
         "sedan_lights_f",
         "sedan_lights_r",
         "sedan_mirror_l",
@@ -45,7 +47,7 @@
     },
     {
       "type": "civ_hatch",
-      "tri_count": 296,
+      "tri_count": 320,
       "dims": {
         "length": 4.1,
         "width": 1.75,
@@ -61,8 +63,10 @@
       "nodes": [
         "hatch_body",
         "hatch_bumper_f",
+        "hatch_bumper_r",
         "hatch_exhaust",
         "hatch_glass",
+        "hatch_hood",
         "hatch_lights_f",
         "hatch_lights_r",
         "hatch_mirror_l",
@@ -76,7 +80,7 @@
     },
     {
       "type": "civ_pickup",
-      "tri_count": 320,
+      "tri_count": 356,
       "dims": {
         "length": 5.4,
         "width": 1.95,
@@ -93,10 +97,13 @@
         "pickup_bedload_0",
         "pickup_bedload_1",
         "pickup_bedload_2",
+        "pickup_bedpanel",
         "pickup_body",
         "pickup_bumper_f",
+        "pickup_bumper_r",
         "pickup_exhaust",
         "pickup_glass",
+        "pickup_hood",
         "pickup_lights_f",
         "pickup_lights_r",
         "pickup_mirror_l",
@@ -109,7 +116,7 @@
     },
     {
       "type": "civ_boxvan",
-      "tri_count": 348,
+      "tri_count": 372,
       "dims": {
         "length": 5.8,
         "width": 2.05,
@@ -125,8 +132,10 @@
       "nodes": [
         "boxvan_body",
         "boxvan_bumper_f",
+        "boxvan_bumper_r",
         "boxvan_exhaust",
         "boxvan_glass",
+        "boxvan_hood",
         "boxvan_lights_f",
         "boxvan_lights_r",
         "boxvan_mirror_l",
@@ -145,7 +154,7 @@
     },
     {
       "type": "civ_bus",
-      "tri_count": 288,
+      "tri_count": 300,
       "dims": {
         "length": 11.0,
         "width": 2.5,
@@ -162,6 +171,7 @@
         "bus_acpod",
         "bus_body",
         "bus_bumper_f",
+        "bus_bumper_r",
         "bus_exhaust",
         "bus_glass",
         "bus_grille",
@@ -177,7 +187,7 @@
     },
     {
       "type": "civ_semi",
-      "tri_count": 496,
+      "tri_count": 508,
       "dims": {
         "length": 16.0,
         "width": 2.45,
@@ -194,6 +204,7 @@
       "nodes": [
         "semi_body",
         "semi_bumper_f",
+        "semi_bumper_r",
         "semi_exhaust",
         "semi_glass",
         "semi_lights_f",

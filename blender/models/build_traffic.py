@@ -187,6 +187,23 @@ def build_civ(tok, spec):
     parts.append(box_at(tok + "_lights_r",
                         (spec["width"] * 0.55, 0.06, 0.10),
                         (0.0, tail - 0.02, spec["bump_u"] + 0.22), MAT["lights"]))
+    # E7: real seams — ejectable panels at natural body lines (bumper_r on all,
+    # hood where the shape has one, pickup tailgate). Panels EJECT on shatter,
+    # so the crumple hull never has to match a panel that stayed behind.
+    parts.append(box_at(tok + "_bumper_r",
+                        (spec["width"] * 0.96, 0.14, 0.28),
+                        (0.0, tail + 0.04, spec["bump_u"]), MAT["paint_traffic"]))
+    if tok in ("sedan", "hatch", "pickup", "boxvan"):
+        hood_f0, hood_f1 = spec["profile"][0][0] + 0.12, spec["canopy"][0][0] - 0.06
+        hood_u = max(u for f, u in spec["profile"] if hood_f0 <= f <= hood_f1)
+        parts.append(box_at(tok + "_hood",
+                            (spec["width"] * 0.86, max(0.5, hood_f1 - hood_f0), 0.035),
+                            (0.0, (hood_f0 + hood_f1) / 2, hood_u + 0.02),
+                            MAT["paint_traffic"]))
+    if tok == "pickup":
+        parts.append(box_at(tok + "_bedpanel",
+                            (spec["width"] * 0.88, 0.06, 0.45),
+                            (0.0, tail - 0.05, 1.02), MAT["paint_traffic"]))
     # dressing (deterministic per type): mirrors, exhaust, dents, type kit
     rng = random.Random(zlib.crc32(tok.encode("utf-8")))
     W = spec["width"]
