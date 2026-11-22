@@ -95,7 +95,7 @@ window.S9 = window.S9 || {};
     },
 
     traffic: {
-      density: 14,              // cars kept alive around the player
+      density: 20,               // cars kept alive around the player (6-lane roads)
       speedMin: 14, speedMax: 23,
       colors: [0xb8b2a6, 0x6f7d8c, 0x7a4f3a, 0x9aa77e, 0x51616f, 0xcfc7b8],
       nearMissCooldown: 1.2,

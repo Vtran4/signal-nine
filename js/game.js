@@ -356,8 +356,8 @@ window.S9 = window.S9 || {};
                 this.physics.slowMo(0.7, 0.3);
                 showEvent('CRASHED', true);
               }
-              // E4 extension: heavy traffic shatters into debris when slammed
-              if (h.traffic && h.traffic.t.mass >= 2.4) this.traffic.shatterHeavy(h.traffic);
+              // E4 extension (E7): every civ shatters on a hard slam — no mass gate.
+              if (h.traffic) this.traffic.shatterHeavy(h.traffic);
             } else if (h.type === 'graze') {
               this.audio.fire('wall');
             }

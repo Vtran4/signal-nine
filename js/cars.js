@@ -337,12 +337,15 @@ window.S9 = window.S9 || {};
       }
       // Phase E4.5: smashed metal — crumple the remaining hull. Position-keyed
       // jitter (shared vertices move together, no tearing) + a slight crush
-      // squash along the impact axis.
+      // squash along the impact axis. CRITICAL: clone the geometry first —
+      // the glb geometries are shared across every car built from the same
+      // source, and denting them would dent the whole roster.
       const jitterMap = {};
       for (const hull of hulls) {
         const geo = hull.geometry;
         if (!geo || !geo.attributes.position) continue;
-        const pos = geo.attributes.position, nrm = geo.attributes.normal;
+        hull.geometry = geo.clone();               // break the shared-geometry link
+        const pos = hull.geometry.attributes.position, nrm = hull.geometry.attributes.normal;
         for (let i = 0; i < pos.count; i++) {
           const key = Math.round(pos.getX(i) * 100) + ',' + Math.round(pos.getY(i) * 100) + ',' + Math.round(pos.getZ(i) * 100);
           if (!(key in jitterMap)) jitterMap[key] = (Math.random() - 0.5) * 0.16;

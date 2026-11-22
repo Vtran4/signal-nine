@@ -79,12 +79,20 @@ window.S9 = window.S9 || {};
       for (let i = 0; i < this.cfg.density; i++) this.#spawn(playerS, i * 60);
     }
 
-    #spawn(playerS, offsetHint) {
+    // Phase D (E5): 6-lane traffic — denser, spread across all same-direction
+  // lanes and the outer oncoming lane; the inner oncoming lane stays lighter
+  // so the dodge line keeps a fair gap.
+  #spawn(playerS, offsetHint) {
       const proto = this.protoPick();
       const dir = this.r() < 0.65 ? 1 : -1;                   // coastal highway: mostly with-traffic
       // with-traffic rides the outer right lane; oncoming the outer left lane
-      const lane = dir > 0 ? this.track.laneOffset
-        : (this.track.laneOncoming !== undefined ? this.track.laneOncoming : -this.track.laneOffset);
+      let lane;
+      if (dir > 0) {
+        const lanes = this.track.lanesWith || [this.track.laneOffset];
+        lane = lanes[Math.floor(this.r() * lanes.length)];   // spread across the 3 lanes
+      } else {
+        lane = this.track.laneOncoming !== undefined ? this.track.laneOncoming : -this.track.laneOffset;
+      }
       const mesh = proto.mesh.clone();
       const wheels = [];
       mesh.traverse((o) => { if (/wheel/i.test(o.name || '')) { o.rotation.order = 'YXZ'; wheels.push(o); } });
@@ -172,13 +180,14 @@ window.S9 = window.S9 || {};
       }
     }
 
-    // Phase E4 extension: heavy traffic (bus/semi) shatters when slammed —
+    // Phase E4 extension (E7 per Victor): ALL civ types shatter when slammed —
     // detach the seams the contract ships (bumper + wheels), crumple the
     // single-piece body, and leave the wreck parked in the road.
     shatterHeavy(c) {
       if (c.wrecked) return;
       c.wrecked = true;
       c.speed = Math.max(c.speed, 4);
+      const dent = c.t.mass >= 2.4 ? 0.22 : 0.15;   // heavies dent deeper
       const parts = [], hulls = [];
       c.mesh.traverse((o) => {
         if (!o.isMesh || !o.name) return;
@@ -201,15 +210,18 @@ window.S9 = window.S9 || {};
         this.debrisRef.push(world);
         if (part.parent) part.parent.remove(part);
       }
-      // E4.5 smashed metal on the single-piece body — bigger dents on a bus
+      // E4.5 smashed metal on the single-piece body — bigger dents on a bus.
+      // Geometry cloned first: civ protos share geometry with every spawned
+      // clone, and denting the proto would dent the whole highway.
       const jitterMap = {};
       for (const hull of hulls) {
         const geo = hull.geometry;
         if (!geo || !geo.attributes.position) continue;
-        const pos = geo.attributes.position, nrm = geo.attributes.normal;
+        hull.geometry = geo.clone();
+        const pos = hull.geometry.attributes.position, nrm = hull.geometry.attributes.normal;
         for (let i = 0; i < pos.count; i++) {
           const key = Math.round(pos.getX(i) * 100) + ',' + Math.round(pos.getY(i) * 100) + ',' + Math.round(pos.getZ(i) * 100);
-          if (!(key in jitterMap)) jitterMap[key] = (Math.random() - 0.5) * 0.22;
+          if (!(key in jitterMap)) jitterMap[key] = (Math.random() - 0.5) * dent;
           const d = jitterMap[key];
           if (nrm) pos.setXYZ(i, pos.getX(i) + nrm.getX(i) * d, pos.getY(i) + nrm.getY(i) * d * 0.5, pos.getZ(i) + nrm.getZ(i) * d);
           else pos.setY(i, pos.getY(i) + d);
