@@ -196,6 +196,19 @@ window.S9 = window.S9 || {};
       return clamp(i, 0, this.count - 1); // point-to-point: clamp, never wrap
     }
 
+    // km-scale layout offsets (modeler's footprint separation) put tracks far
+    // from world origin — anchor all world dressing on the spline's OWN
+    // centroid, never on world origin. Fallback parallax cull, ground disc and
+    // sky dome all key off this; the baked-glb path doesn't use the first two
+    // but the sky dome still renders whenever the pano env fails to load.
+    #centroid(out = { x: 0, z: 0 }) {
+      if (!this.count) return out;
+      let sx = 0, sz = 0;
+      for (let n = 0; n < this.count; n++) { sx += this.px[n]; sz += this.pz[n]; }
+      out.x = sx / this.count; out.z = sz / this.count;
+      return out;
+    }
+
     // interpolate sample at fractional sample-index
     #mix(aProp, i) {
       const i0 = Math.floor(i), f = i - i0;
@@ -370,6 +383,7 @@ window.S9 = window.S9 || {};
 
     #buildSurrounds(seed) {
       // scattered greybox blocks for parallax (blur needs things to smear)
+      const cen = this.#centroid();
       const r = rng(seed ^ 0x9e37);
       const geo = new THREE.BoxGeometry(1, 1, 1);
       const matA = new THREE.MeshLambertMaterial({ color: S9.CFG.palette.hill });
@@ -382,7 +396,7 @@ window.S9 = window.S9 || {};
       for (let i = 0; i < n * 3 && (a < n || b < n); i++) {
         const s = r() * this.length;
         const p = this.posAt(s, (r() < 0.5 ? -1 : 1) * (24 + r() * 160));
-        if (Math.abs(p.x) > 1400 || Math.abs(p.z) > 1400) continue;
+        if (Math.abs(p.x - cen.x) > 1400 || Math.abs(p.z - cen.z) > 1400) continue;
         const w = 6 + r() * 22, h = 4 + r() * 26, d = 6 + r() * 22;
         q.setFromAxisAngle(up, r() * Math.PI);
         p.y += h / 2 - 1;
@@ -400,7 +414,7 @@ window.S9 = window.S9 || {};
         new THREE.CircleGeometry(2400, 48),
         new THREE.MeshLambertMaterial({ color: 0x8fa06a }));
       ground.rotation.x = -Math.PI / 2;
-      ground.position.y = -3.2;
+      ground.position.set(cen.x, -3.2, cen.z);   // tracks live far from origin now
       this.scene.add(ground);
     }
 
@@ -417,6 +431,8 @@ window.S9 = window.S9 || {};
           void main(){ float t = clamp(vP.y / 3000.0 * 1.6 + 0.28, 0.0, 1.0); gl_FragColor = vec4(mix(low, top, pow(t, 0.8)), 1.0); }`,
       });
       this.sky = new THREE.Mesh(geo, mat);
+      const cen = this.#centroid();
+      this.sky.position.set(cen.x, 0, cen.z);    // camera can sit km from origin
       this.sky.frustumCulled = false;
       this.scene.add(this.sky);
     }
