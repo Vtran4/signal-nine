@@ -1,0 +1,35 @@
+{
+ "coastal_target": 153.9,
+ "per_group": {
+  "canyon": {
+   "median": 154.3,
+   "gain": 1.4,
+   "island_pct": 33.5
+  },
+  "coastal": {
+   "median": 153.9,
+   "gain": 2.4,
+   "island_pct": 35.2
+  },
+  "downtown": {
+   "median": 75.4,
+   "gain": 2.4,
+   "island_pct": 68.0
+  },
+  "props": {
+   "median": 60.7,
+   "gain": 2.2,
+   "island_pct": 38.6
+  }
+ },
+ "atlas_state": {
+  "albedo_canyon.jpg": "a61bced7dbe397cb",
+  "albedo_coastal.jpg": "c1b88a50dc48315e",
+  "albedo_downtown.jpg": "176156fe0a121f82",
+  "albedo_props.jpg": "bdce8638f3a55739",
+  "light_canyon.jpg": "9f7576fda4b416d3",
+  "light_coastal.jpg": "e99926c5b645a8db",
+  "light_downtown.jpg": "de31c85a142ebcee",
+  "light_props.jpg": "67151182dacfc3d9"
+ }
+}
