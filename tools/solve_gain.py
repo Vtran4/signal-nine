@@ -32,9 +32,10 @@ as 187 == 187 on screen). Solves are therefore RELATIVE:
 Island mask: lossless albedo PNG, max-channel > 2/255 (bake background is
 clear-black). Values: the SHIPPED JPGs (what the client samples), mean-channel
 luminance. Also reports per group: light distribution, mid-band share
-(60-200, the Option A acceptance metric), and the ambient-term share of the
-median render (flags when the 0.12 compose floor dominates — the cue to
-re-check the ambient term before trusting the gain).
+(60-200 — informational distribution stat only; the ">20% mid-band" acceptance
+gate was RETIRED 2026-11-23, see tools/fix_batch_status.md), and the
+ambient-term share of the median render (flags when the 0.12 compose floor
+dominates — the cue to re-check the ambient term before trusting the gain).
 """
 import hashlib
 import json

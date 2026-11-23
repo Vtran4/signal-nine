@@ -25,7 +25,12 @@ fps (57fps/17.5ms gap/2.2ms cost/SUSTAINED_OK), canyon-track boot clean.
   comes down off saturation. **Acceptance is distributional, not eyeball:**
   lit-texel population moves from bimodal (<10 / 255) to carrying a real mid
   band — target **>20% of lit texels in 60–200**, checked with the alpha-aware
-  decoder before anything ships. Once mid-tones exist, coder solves the downtown
+  decoder before anything ships. [RETIRED 2026-11-23 by pm-s9 ruling: the >20%
+  mid-band gate conflated scene character with bake health — modeler's flat-world
+  proof showed the DEFECTIVE bake with MORE mid-band (12.1%) than the healthy one
+  (2.77%), because buried down-facing terrain sat mid-band. Replacement acceptance
+  stack: structural WORLD_RIG check + fill lamp + per-object probe suite; final
+  say on look = Victor's before/after verdict.] Once mid-tones exist, coder solves the downtown
   gain entry from paired texels to the coastal anchor (187), same procedure as
   canyon's 1.4, landed in the same embed cycle. Cost: rig tweak + `--test` probe
   + one downtown-group re-bake (~4–5 min) + embed + smoke — half a round
