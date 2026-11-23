@@ -163,7 +163,9 @@ GPU. Acceptance gates for the vertical slice:
   oncoming + near-miss → one scripted crash + respawn → finish with medal →
   one Crash junction launch → results → restart, with the medal and damage
   score matching the event log.
-- **fps** — frame-rate gate: 60 fps sustained at 1080p on the desktop GTX
-  1080 Ti target, with the dynamic scaler engaged and full traffic on track.
+- **fps** — frame-rate gate at 1080p on the desktop GTX 1080 Ti: design target
+  60, contract asserts **≥55 sustained** + median RAF gap ≤18.5ms + frame-EMA
+  ≤18ms with the dynamic scaler unengaged (resScale 1.0) and full traffic on
+  track (ratified 2026-11-23; contract form implemented in `8b3bbe5`).
 
 See the repository history for the verification log of each shipped build.

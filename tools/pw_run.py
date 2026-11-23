@@ -133,5 +133,92 @@ with sync_playwright() as p:
         print("ERRORS:", json.dumps(errors[:10], indent=1))
         fps_pg.close()
 
+    elif MODE == "audio":
+        # audio-verification rider (approved 2026-11-23): functional check of the
+        # WebAudio set via the window.__g.audio debug handle — zero client changes.
+        # Drives the REAL graph: enable -> build check -> engine pitch tracks
+        # speed -> boost swell -> drift chirp -> music scheduler advances ->
+        # one-shot events build their graphs (in-page node-count patch).
+        import json as _json
+        au_pg, errors = new_page(ctx)
+        au_pg.goto(f"http://127.0.0.1:{PORT}/index.html?seed=7&auto=1&state=drive")
+        wait_ready(au_pg)
+        checks = au_pg.evaluate("""(async () => {
+          const out = {};
+          const A = window.__g && window.__g.audio;
+          if (!A) return { fatal: 'no window.__g.audio handle' };
+          A.enable();
+          out.enabled = !!(A.on && A.ctx);
+          out.ctxState = A.ctx ? A.ctx.state : 'none';
+          if (A.ctx && A.ctx.state === 'suspended') { try { await A.ctx.resume(); } catch (e) {} }
+          out.ctxStateAfterResume = A.ctx ? A.ctx.state : 'none';
+          out.graph = { osc: A.osc ? A.osc.length : 0, hasFilter: !!A.engFilter,
+                        hasBuses: !!(A.busEngine && A.busSfx && A.busMusic),
+                        hasChirp: !!A.chirpGain, hasWind: !!A.windGain };
+          const settle = (ms) => new Promise(r => setTimeout(r, ms));
+          // The live game loop calls audio.update() every frame with REAL state,
+          // clobbering any single synthetic call. For the state-driven checks we
+          // shadow the instance's update() for the drive duration — the game's
+          // calls land in our wrapper and the ORIGINAL update() receives ONLY
+          // our synthetic state. Restored right after. Page-side test rig only.
+          const realUpdate = A.update.bind(A);
+          let shadow = null;
+          A.update = (dt, st) => shadow ? shadow(dt, st) : realUpdate(dt, st);
+          const drive = async (ms, st) => { shadow = (dt) => realUpdate(dt, st);
+            await settle(ms); shadow = null; };
+          // 1) engine pitch tracks speed: drive update() with synthetic state
+          await drive(300, { speedNorm: 0.05, throttle: 0, boostK: 0, drifting: false });
+          const fLow = A.osc[0].frequency.value;
+          await drive(300, { speedNorm: 0.95, throttle: 1, boostK: 0, drifting: false });
+          const fHigh = A.osc[0].frequency.value;
+          out.enginePitch = { fLow: Math.round(fLow * 10) / 10, fHigh: Math.round(fHigh * 10) / 10,
+                              tracksSpeed: fHigh > fLow * 2 };
+          // 2) boost swell: music bus to ~1.0 on boost, ~0.3 off
+          await drive(500, { speedNorm: 0.5, throttle: 1, boostK: 0.9, drifting: false });
+          const gBoost = A.busMusic.gain.value;
+          await drive(900, { speedNorm: 0.5, throttle: 1, boostK: 0, drifting: false });
+          const gCalm = A.busMusic.gain.value;
+          out.boostSwell = { boost: Math.round(gBoost * 100) / 100, calm: Math.round(gCalm * 100) / 100,
+                             swells: gBoost > 0.85 && gCalm < 0.55 };
+          // 3) drift chirp gates on drifting
+          await drive(300, { speedNorm: 0.6, throttle: 1, boostK: 0, drifting: true });
+          const cOn = A.chirpGain.gain.value;
+          await drive(600, { speedNorm: 0.6, throttle: 1, boostK: 0, drifting: false });
+          const cOff = A.chirpGain.gain.value;
+          out.chirp = { on: Math.round(cOn * 1000) / 1000, off: Math.round(cOff * 1000) / 1000,
+                        gates: cOn > 0.1 && cOff < 0.05 };
+          A.update = realUpdate;  // unwrap — game state flows normally again
+          // 4) music scheduler advances on the real clock
+          const s0 = A._step; await settle(1200); const s1 = A._step;
+          out.musicScheduler = { step0: s0, step1: s1, advances: s1 > s0 };
+          // 5) one-shot events actually build their graphs (count node creation)
+          const counts = { osc: 0, gain: 0, buf: 0, filt: 0 };
+          const wrap = (kind, key) => { const orig = A.ctx[kind].bind(A.ctx);
+            A.ctx[kind] = (...a) => { counts[key]++; return orig(...a); }; };
+          wrap('createOscillator', 'osc'); wrap('createGain', 'gain');
+          wrap('createBufferSource', 'buf'); wrap('createBiquadFilter', 'filt');
+          const fired = {};
+          for (const ev of ['nearmiss', 'crash', 'burnout', 'wall']) {
+            const before = { ...counts };
+            try { A.fire(ev); fired[ev] = true; } catch (e) { fired[ev] = String(e); }
+            await settle(30);
+            fired[ev + '_nodes'] = (counts.osc - before.osc) + (counts.gain - before.gain)
+                                 + (counts.buf - before.buf) + (counts.filt - before.filt);
+          }
+          out.events = fired;
+          out.allOk = out.enabled && out.ctxStateAfterResume === 'running'
+            && out.graph.osc === 3 && out.graph.hasFilter && out.graph.hasBuses
+            && out.graph.hasChirp && out.graph.hasWind
+            && out.enginePitch.tracksSpeed && out.boostSwell.swells
+            && out.chirp.gates && out.musicScheduler.advances
+            && ['nearmiss', 'crash', 'burnout', 'wall'].every(ev => fired[ev] === true && fired[ev + '_nodes'] > 0);
+          return out;
+        })()""")
+        print("AUDIO:", _json.dumps(checks, indent=1))
+        print("AUDIO_OK:", checks.get("allOk", False))
+        print("ERRORS:", _json.dumps(errors[:10], indent=1))
+        shot(au_pg, "audio_main")
+        au_pg.close()
+
     b.close()
 print("DONE", MODE)
