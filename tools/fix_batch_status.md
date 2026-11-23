@@ -41,6 +41,16 @@ fps (57fps/17.5ms gap/2.2ms cost/SUSTAINED_OK), canyon-track boot clean.
     the solver's anchor math stays honest; (3) optional embed hardening: refuse
     to bundle atlases whose resolution mismatches manifest.json's per-group
     `res` (would have caught a stray `--test` artifact before it shipped).
+    - PROCEDURE CORRECTION (2026-11-23, pm-s9-endorsed, tool = `tools/solve_gain.py`
+      @ 92855a5): the "(187)" anchor above is a visible-frame screenshot median
+      and is NOT reproducible from atlases alone. The operative procedure is
+      RELATIVE — `gain_targets.json` snapshots each group's model-median render
+      at its landed gain on the PRE-rebake atlases (sha256-stamped), then
+      `solve_gain.py solve` re-solves every group on the new atlases to
+      coastal's preserved median. Selftest round-trips the current map
+      (canyon 1.392≈1.4, coastal 2.399≈2.4: PASS). Commitment (2) is covered
+      by the solver's per-group ambient-share report (flags when the 0.12
+      floor dominates the median render).
 - **Option B (stopgap):** compose ambient 0.12 → ~0.30 — lifts the unlit 55%
   from ~60 to ~100, islands +~11; a softening, not a fix, look call for Victor.
 - **Option C:** verdict is "shaded-pale healthy" → status quo, nothing lands.
