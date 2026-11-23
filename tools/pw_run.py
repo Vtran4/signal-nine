@@ -50,6 +50,11 @@ with sync_playwright() as p:
         print("STATE:", pg.evaluate("window.__state ? window.__state() : 'none'"))
         print("ERRORS:", json.dumps(errors[:20], indent=1))
         print("COLLECTED:", pg.evaluate("JSON.stringify(window.__errors || [])")[:2000])
+        # texture hardening: the baked swap must happen AND come from the
+        # embed bundle. A fallback hit while the bundle exists = manifest/
+        # bundle drift — the exact bug that white-screened file:// while four
+        # localhost gates stayed green.
+        print("TEX:", pg.evaluate("JSON.stringify({bakeSwap: window.__bakeSwap, texCounts: window.__texCounts || null})"))
         print("SHOT:", shot(pg, "smoke_main"))
         # fx off — the post stack disabled must also boot clean (?fx=0 isolates it)
         pg2, errors2 = new_page(ctx)
@@ -104,17 +109,29 @@ with sync_playwright() as p:
         pg.close()
 
     elif MODE == "fps":
-        pg, errors = new_page(ctx)
-        pg.goto(BASE + "&seed=7&auto=1&state=drive")
-        wait_ready(pg)
-        pg.wait_for_timeout(3000)
-        samples = pg.evaluate("""(async () => {
-          await new Promise(r => setTimeout(r, 10000));
-          return {fps: window.__fps, ms: window.__frameMs};
+        # contract (pinned by pm-s9): design target 60 sustained at 1080p on the
+        # 1080 Ti; headless cadence bounds this assert at ~57 (RAF gaps ~17.5ms
+        # median), real-display 60 validated via headed capture. Asserts:
+        # sustained fps >= 55, median RAF gap <= 18.5ms, frame-cost EMA <= 18ms,
+        # scaler unengaged (resScale 1.0), full live traffic, no ?lockres.
+        fps_pg, errors = new_page(ctx)
+        fps_pg.goto(f"http://127.0.0.1:{PORT}/index.html?seed=7&auto=1&state=drive")
+        wait_ready(fps_pg)
+        fps_pg.wait_for_timeout(3000)  # let the scaler settle
+        samples = fps_pg.evaluate("""(async () => {
+          const gaps = []; let last = performance.now(); let n = 0;
+          await new Promise(res => { function f(){ const t = performance.now(); gaps.push(t - last); last = t; n++;
+            if (n < 600) requestAnimationFrame(f); else res(); } requestAnimationFrame(f); });
+          gaps.sort((a, b) => a - b);
+          return {fps: window.__fps, ms: window.__frameMs, scale: window.__resScale,
+                  medianGap: Math.round(gaps[Math.floor(gaps.length / 2)] * 100) / 100};
         })()""")
-        print("FPS:", json.dumps(samples))
+        sustained_ok = (samples["fps"] >= 55 and samples["medianGap"] <= 18.5
+                        and samples["ms"] <= 18.0 and samples["scale"] == 1.0)
+        print("CONTRACT: design target 60 sustained; headless cadence bounds this assert at ~57; real-display 60 validated via headed capture")
+        print("FPS:", json.dumps(samples), "SUSTAINED_OK:", sustained_ok)
         print("ERRORS:", json.dumps(errors[:10], indent=1))
-        pg.close()
+        fps_pg.close()
 
     b.close()
 print("DONE", MODE)

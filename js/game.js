@@ -593,10 +593,13 @@ window.S9 = window.S9 || {};
       this.hud.capSpeed.style.display = 'block';
       // speed block
       this.hud.speedBig.innerHTML = fmtMph(this.car.speed) + '<small> MPH</small>';
-      // boost meter + multiplier (chain +1 per burnout in the current chain)
+      // boost meter + multiplier (chain +1 per burnout in the current chain);
+      // the badge lights only once the meter can actually trigger (>= triggerAt)
+      // — at 0.99 the bar was visually full for ~a second before SHIFT worked
       const b = this.car.boost;
       this.hud.bar.style.width = (b.meter * 100).toFixed(1) + '%';
       this.hud.bar.classList.toggle('burn', b.active);
+      this.hud.mult.classList.toggle('ready', !b.active && b.meter >= S9.CFG.boost.triggerAt);
       this.hud.mult.textContent = '×' + Math.max(1, b.active ? b.chain + 1 : 1);
       // earn-source chips: lit while that earn channel is paying out
       this.hud.chipOncoming.classList.toggle('on',

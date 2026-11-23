@@ -134,7 +134,10 @@ window.S9 = window.S9 || {};
           this.done[i] = true;
           this.finishOrder.push(i);
           if (i === 0) {
-            this.playerPos = this.finishOrder.length;
+            // clamp: a rival finishing in the same frame as the player (sprint
+            // grids bunch rivals within one frame of the line) used to read
+            // the order as N+1 — 'POS 7/6'. Six cars, six places, hard cap.
+            this.playerPos = Math.min(this.finishOrder.length, this.rivals.length + 1);
             this.medal = MEDALS[clamp(this.playerPos - 1, 0, 4)];
             this.state = 'finished';
             this.resultsTimer = 1.4;

@@ -62,7 +62,9 @@
   #boostbar.burn { background: linear-gradient(90deg, #fff3b0, #ffd23e 35%, #ff5d3a); }
   #mult { position: absolute; right: -14px; top: 50%; margin-top: -12px; transform: skewX(8deg);
           font-family: 'Anton', sans-serif; font-size: 20px; color: var(--cream);
-          background: #0d1626; border: 2px solid #ffd23e; padding: 1px 9px; }
+          background: #0d1626; border: 2px solid #ffd23e; padding: 1px 9px;
+          opacity: .38; } /* badge waits dimmed until the meter can actually trigger */
+  #mult.ready { opacity: 1; }
   #cap-boost { position: fixed; }
   #cap-boost .lblrow { display: flex; align-items: center; gap: 10px; }
 

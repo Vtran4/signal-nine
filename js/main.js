@@ -52,11 +52,17 @@ window.S9 = window.S9 || {};
     } catch (e) { return null; }
   }
 
-  // atlas textures: embedded data URIs (file://) or fetch (localhost)
+  // atlas textures: embedded data URIs (file://) or fetch (localhost).
+  // texCounts: bundle hits vs relative-path fallbacks. A fallback hit while
+  // the embed bundle exists = bundle/manifest drift — the exact class of bug
+  // that white-screened file:// (localhost masked it via the png fallback).
   function makeTexLoader() {
     return (name, srgb) => new Promise((res, rej) => {
       const A = window.__S9_ASSETS;
-      const src = (A && A[name]) ? A[name] : 'assets/' + name;
+      const embedded = A && !!A[name];
+      const src = embedded ? A[name] : 'assets/' + name;
+      const tc = (window.__texCounts = window.__texCounts || { bundle: 0, fallback: 0 });
+      if (embedded) tc.bundle++; else tc.fallback++;
       new THREE.TextureLoader().load(src, (t) => {
         if (srgb) t.colorSpace = THREE.SRGBColorSpace;
         t.anisotropy = 8;
@@ -119,7 +125,12 @@ window.S9 = window.S9 || {};
       if (manifest) {
         S9.applyBakedStatics(tracksGltf.scene, manifest, makeTexLoader())
           .then((n) => { window.__bakeSwap = n; })
-          .catch((e) => { window.__errors.push({ m: 'bake swap: ' + (e && e.message || e), s: 'main.js', l: 0, c: 0, st: '' }); });
+          .catch((e) => {
+            // TextureLoader rejects with the raw error Event (no .message) —
+            // '[object Event]' hid the failed URL; surface the real cause.
+            const why = e && e.message ? e.message : (e && e.target && (e.target.src || e.target.url)) || String(e);
+            window.__errors.push({ m: 'bake swap: ' + why, s: 'main.js', l: 0, c: 0, st: '' });
+          });
         track.collectLodGroups();
         window.__lodGroups = track.lodGroups ? track.lodGroups.length : 0;
       }
@@ -223,6 +234,7 @@ window.S9 = window.S9 || {};
       fpsEma = fpsEma * 0.95 + (1 / dtRaw) * 0.05;
       window.__frameMs = Math.round(msEma * 10) / 10;
       window.__fps = Math.round(fpsEma);
+      window.__resScale = Math.round(scale * 100) / 100;  // fps-gate: scaler state
       if (!P.lockres) {
         if (msEma > S9.CFG.fpsGate.msHigh && scale > S9.CFG.fpsGate.scaleMin) { scale = Math.max(S9.CFG.fpsGate.scaleMin, scale - 0.05); applyScale(); }
         else if (msEma < S9.CFG.fpsGate.msLow && scale < S9.CFG.fpsGate.scaleMax) { scale = Math.min(S9.CFG.fpsGate.scaleMax, scale + 0.05); applyScale(); }
