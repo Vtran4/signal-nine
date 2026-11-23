@@ -6,8 +6,8 @@ window.__S9_MANIFEST = {
     "coastal": {
       "group": "coastal",
       "res": 2048,
-      "albedo": "albedo_coastal.png",
-      "light": "light_coastal.png",
+      "albedo": "albedo_coastal.jpg",
+      "light": "light_coastal.jpg",
       "nodes": [
         "coastal_ocean",
         "coastal_paint_w",
@@ -33,8 +33,8 @@ window.__S9_MANIFEST = {
     "props": {
       "group": "props",
       "res": 1024,
-      "albedo": "albedo_props.png",
-      "light": "light_props.png",
+      "albedo": "albedo_props.jpg",
+      "light": "light_props.jpg",
       "nodes": [
         "props_cn_gantry_start",
         "props_cn_guard_0356",
@@ -392,8 +392,8 @@ window.__S9_MANIFEST = {
     "downtown": {
       "group": "downtown",
       "res": 2048,
-      "albedo": "albedo_downtown.png",
-      "light": "light_downtown.png",
+      "albedo": "albedo_downtown.jpg",
+      "light": "light_downtown.jpg",
       "nodes": [
         "downtown_block_00",
         "downtown_block_01",
@@ -442,8 +442,8 @@ window.__S9_MANIFEST = {
     "canyon": {
       "group": "canyon",
       "res": 2048,
-      "albedo": "albedo_canyon.png",
-      "light": "light_canyon.png",
+      "albedo": "albedo_canyon.jpg",
+      "light": "light_canyon.jpg",
       "nodes": [
         "canyon_paint_w",
         "canyon_paint_y",
