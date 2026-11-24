@@ -176,13 +176,10 @@ with sync_playwright() as p:
             # spec's S2 drift LINE is a player technique (bot.js hardcodes
             # drift:false) — reported as S2 sweep mph below, not gating
             "drift_flag_live": stats["driftTime"] > 0.2,
-            # air_observed is REPORT-ONLY pending a pm-s9/user ruling: the
-            # measured downtown crest is physically incapable of ballistic lift
-            # (max 20m grade drop 0.0068 => road-vy drop 0.38 m/s at 56 m/s =
-            # ~0.04g; peak 9.93m @ s1950, plateau to s~2200). The crest-lift
-            # mechanic IS live in cars.js (fires on genuinely sharp crests —
-            # canyon rolls, any future overpass sharpening). The spec's S4 air
-            # beat needs an arcade-hop ruling (magnitude) or a geometry change.
+            # crest_air: Option 1 arcade-hop is LIVE (ruling 2026-11-24) — the
+            # bot carries 120+ mph into the S4 crest, so the 10 Hz fast-poll
+            # must see ~0.75s of air; 0.5s floor = ruling margin
+            "crest_air_0p75": maxAirT > 0.5,
             "progress_made": fin["dbg"]["s"] > 1500,
         }
         s2Mph = max((x["mph"] for x in samples if 400 <= x["s"] <= 900), default=0)

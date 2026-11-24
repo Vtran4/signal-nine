@@ -82,6 +82,9 @@ window.S9 = window.S9 || {};
         air: 0.05,              // per second airborne + landing bonus below
         airLanding: 0.10,       // per 0.5s of air on touchdown
       },
+      hopVy: 3.7,               // Option 1 arcade-hop impulse (ruling 2026-11-24):
+                                // crest triggers floor at this vy -> ~0.75s airtime
+                                // on every track, not just physically-sharp crests
       oncomingMinSpeed: 20,     // m/s before oncoming registers
       driftMinSpeed: 16, driftMinSlip: 0.24,
       nearMissGap: 2.35,        // max lateral gap (m) that still counts

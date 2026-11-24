@@ -271,21 +271,29 @@ window.S9 = window.S9 || {};
           if (land > 0) this.boost.meter = clamp(this.boost.meter + land, 0, 1);
         }
       } else if (this.speed > 20) {
-        // crest lift, physically framed: with climb grade behind us the car
-        // carries vertical momentum vy = v·grade; it lifts when the ballistic
-        // apex exceeds the road's own rise over the flight distance (the road
-        // "falls away"). Coastal rollers (grade ~0.005) stay under the 4cm
-        // apex floor; the downtown crest at speed clears it easily.
+        // Crest triggers (Victor's Option 1 arcade-hop ruling, 2026-11-24):
+        // - sharpCrest: the physical path — ballistic apex beats the road's
+        //   rise over the flight distance (4cm floor filters rollers)
+        // - gentleCrest: climb momentum + the road flattening ahead within
+        //   25m — fires on eased crests like downtown's, whose measured
+        //   profile (max 20m grade drop 0.0068 = 0.04g) can never lift
+        //   ballistically
+        // The impulse floors vy at boost.hopVy (3.7 m/s -> ~0.75s airtime)
+        // whenever the car carries real speed (>25 m/s); below that the
+        // sharp path stays physical so low-speed rolls never bunny-hop.
         const grade = T.gradeAt ? T.gradeAt(this.s) : 0;
         if (grade > 0.004) {
           const vy = this.speed * grade;
           const apex = (vy * vy) / (2 * 9.8);
-          if (apex > 0.04) {
-            const d = this.speed * ((2 * vy) / 9.8);   // full flight distance
-            const yRoad = T.posAt(this.s + d, this.lateral).y - pRoad.y;
-            if (yRoad < apex - 0.04) {
-              this.air.up = true; this.air.time = 0; this.vy = vy; this.y = pRoad.y;
-            }
+          const d = this.speed * ((2 * vy) / 9.8);   // full flight distance
+          const yRoad = T.posAt(this.s + d, this.lateral).y - pRoad.y;
+          const sharpCrest = apex > 0.04 && yRoad < apex - 0.04;
+          const gradeAhead = T.gradeAt ? T.gradeAt(this.s + 25) : 0;
+          const gentleCrest = gradeAhead < grade * 0.5 && this.speed > 25;
+          if (sharpCrest || gentleCrest) {
+            this.air.up = true; this.air.time = 0;
+            this.vy = this.speed > 25 ? Math.max(vy, S9.CFG.boost.hopVy) : vy;
+            this.y = pRoad.y;
           }
         }
       }
