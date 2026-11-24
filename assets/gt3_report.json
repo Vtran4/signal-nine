@@ -38,6 +38,7 @@
   "gt3_roof",
   "gt3_splitter",
   "gt3_tail_panel",
+  "gt3_tailband",
   "gt3_wheel_fl",
   "gt3_wheel_fr",
   "gt3_wheel_rl",
@@ -48,7 +49,7 @@
   "gt3_wing_pylon_l",
   "gt3_wing_pylon_r"
  ],
- "tris": 5284,
+ "tris": 5286,
  "materials": [
   "caliper_red",
   "carbon_weave_gloss",
@@ -56,6 +57,7 @@
   "gt3_endplate_red",
   "gt3_hub_gray",
   "gt3_louver_dark",
+  "gt3_tailband_dark",
   "gt3_well_black",
   "lights_f",
   "lights_r",
