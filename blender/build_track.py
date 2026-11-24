@@ -137,6 +137,38 @@ grade_asphalt(MAT["road"], [0.083, 0.25, 0.417, 0.583, 0.75, 0.917])
 grade_surface(MAT["terrain"], mottle_scale=14.0, dark=(0.80, 0.78, 0.74))
 grade_surface(MAT["concrete"], mottle_scale=10.0, dark=(0.88, 0.88, 0.86))
 
+def grade_facade(mat, floor_h=3.4):
+    """Facade detail for greybox building chunks (W3 sub-defect: 'facade
+    albedo blank'). Tone mottle + horizontal floor-band darkening driven by
+    OBJECT-space Z — bands align with floors on every building in a chunk
+    regardless of chunk boundaries."""
+    grade_surface(mat, mottle_scale=7.0, dark=(0.88, 0.88, 0.88))
+    nt = mat.node_tree
+    b = nt.nodes.get("Principled BSDF")
+    link = next(l for l in nt.links
+                if l.to_node == b and l.to_socket.name == "Base Color")
+    src = link.from_socket
+    tc = nt.nodes.new("ShaderNodeTexCoord")
+    sep = nt.nodes.new("ShaderNodeSeparateXYZ")
+    div = nt.nodes.new("ShaderNodeMath"); div.operation = "DIVIDE"
+    div.inputs[1].default_value = floor_h
+    fl = nt.nodes.new("ShaderNodeMath"); fl.operation = "FLOOR"
+    sub = nt.nodes.new("ShaderNodeMath"); sub.operation = "SUBTRACT"
+    band = nt.nodes.new("ShaderNodeMath"); band.operation = "LESS_THAN"
+    band.inputs[1].default_value = 0.16          # spandrel band = 16% of a floor
+    dark = nt.nodes.new("ShaderNodeMixRGB"); dark.blend_type = "MULTIPLY"
+    dark.inputs["Fac"].default_value = 1.0
+    dark.inputs["Color2"].default_value = (0.62, 0.62, 0.64, 1.0)
+    nt.links.new(src, dark.inputs["Color1"])
+    nt.links.new(tc.outputs["Object"], sep.inputs[0])
+    nt.links.new(sep.outputs["Z"], div.inputs[0])
+    nt.links.new(div.outputs[0], fl.inputs[0])
+    nt.links.new(div.outputs[0], sub.inputs[0])
+    nt.links.new(fl.outputs[0], sub.inputs[1])
+    nt.links.new(sub.outputs[0], band.inputs[0])
+    nt.links.new(band.outputs[0], dark.inputs["Fac"])
+    nt.links.new(dark.outputs[0], b.inputs["Base Color"])
+
 # ---------------- mesh helpers ----------------
 def mesh_from(name, verts, faces, mat, location=(0, 0, 0)):
     me = bpy.data.meshes.new(name)
@@ -435,7 +467,16 @@ def build_terrain():
     for iy in range(NY):
         for ix in range(NX):
             faces.append((v(ix, iy), v(ix + 1, iy), v(ix + 1, iy + 1), v(ix, iy + 1)))
-    return mesh_from("coastal_terrain", verts, faces, MAT["terrain"])
+    ob = mesh_from("coastal_terrain", verts, faces, MAT["terrain"])
+    # mesh_from's recalc_face_normals picks a DOWNWARD direction for open
+    # grid sheets (2026-11-23: whole terrain baked its under-hemisphere).
+    # The client never sees normals (unlit compose) but the bake does.
+    nz = sum((ob.matrix_world.to_3x3() @ p.normal).normalized().z
+             for p in ob.data.polygons)
+    if nz < 0:
+        ob.data.flip_normals()
+        print("TERRAIN_NORMALS_FLIPPED: coastal_terrain")
+    return ob
 
 build_terrain()
 mesh_from("coastal_ocean",
@@ -635,6 +676,16 @@ CTRL_DT = [(-40, 0, 0.2), (300, 0, 0.2), (520, 60, 0.2), (640, 220, 0.2),
            (-60, -140, 4.5), (80, -200, 0.2), (320, -240, 0.2), (560, -260, 0.2)]
 
 S2 = resample_open(dense_open(CTRL_DT), SPACING)
+# Layout pass (2026-11-23): pure-translation offsets separate the three layer
+# footprints. Diagnosis: coastal_terrain's hills (x -700..+800, z up to +51)
+# hung OVER downtown furniture (dt crosswalk baked 25 m under a hill), and
+# downtown_ground (z 0.0) buried its own road (z -0.1) — the "binary downtown
+# lightmap". Downtown shifts +6000 X and +0.15 Z (road lands ABOVE its ground
+# plate); canyon shifts +6000 Y. Coastal stays at origin so its accepted look,
+# pano, and gate baseline are untouched. Contract: pure translation per track —
+# tools/verify_track_shift.py asserts constant per-track delta + unchanged
+# arclength invariants before anything client-consumed swaps.
+S2 = [(p[0] + 6000.0, p[1], p[2] + 0.15) for p in S2]
 N2 = len(S2)
 TRACK_LEN_DT = (N2 - 1) * SPACING
 T2, L2 = tangents_lefts(S2, False)
@@ -658,12 +709,13 @@ def on_deck(i):
     return S2[i][2] > 5.5
 
 mesh_from("downtown_ground",
-          [(-800, -800, 0.0), (1200, -800, 0.0), (1200, 1000, 0.0), (-800, 1000, 0.0)],
+          [(5200, -800, 0.0), (7200, -800, 0.0), (7200, 1000, 0.0), (5200, 1000, 0.0)],
           [(0, 1, 2, 3)], MAT["concrete"])
 
 # underpass: the start avenue visually continues west beneath the overpass deck
+# (layout pass: shifted with downtown — +6000 X, +0.15 Z)
 mesh_from("downtown_underpass",
-          [(-280, -5, 0.02), (-40, -5, 0.02), (-40, 5, 0.02), (-280, 5, 0.02)],
+          [(5720, -5, 0.17), (5960, -5, 0.17), (5960, 5, 0.17), (5720, 5, 0.17)],
           [(0, 1, 2, 3)], MAT["road"])
 
 def build_junctions():
@@ -785,8 +837,10 @@ def build_blocks():
     def flush():
         if chunk["faces"]:
             tone = random.choice(BUILDING_TONES)
+            mat = pbr("building_t" + f"{chunk['n']:02d}", tone)
+            grade_facade(mat)
             mesh_from("downtown_block_" + f"{chunk['n']:02d}", chunk["verts"],
-                      chunk["faces"], pbr("building_t" + f"{chunk['n']:02d}", tone))
+                      chunk["faces"], mat)
             chunk["n"] += 1
             chunk["verts"] = []
             chunk["faces"] = []
@@ -876,6 +930,11 @@ CTRL_CN = [(0, -520, 10), (10, -300, 11), (-10, -140, 13), (30, -40, 15),
            (-440, -240, 30), (-330, -320, 20), (-180, -420, 12), (-40, -480, 10)]
 
 S3 = resample_closed(dense_closed(CTRL_CN), SPACING)
+# Layout pass (see the downtown note): canyon shifts +6000 Y — its gorge
+# height field is road-relative (cn_terrain_h samples distance to cn_coarse),
+# so the carve stays self-consistent; only the field-grid constants below
+# must travel with it.
+S3 = [(p[0], p[1] + 6000.0, p[2]) for p in S3]
 N3 = len(S3)
 TRACK_LEN_CN = N3 * SPACING
 T3, L3 = tangents_lefts(S3, True)
@@ -897,7 +956,8 @@ def cn_curvature(i):
     dot = max(-1.0, min(1.0, a[0] * b[0] + a[1] * b[1] + a[2] * b[2]))
     return math.acos(dot) / (4 * SPACING)
 
-CN_TX0, CN_TX1, CN_TY0, CN_TY1 = -620.0, 140.0, -640.0, 520.0
+CN_TX0, CN_TX1, CN_TY0, CN_TY1 = -620.0, 140.0, 5360.0, 6520.0
+CN_OFF_Y = 6000.0  # layout pass canyon Y offset — noise field evaluates at (x, y-CN_OFF_Y) so the accepted terrain shape relocates exactly
 CN_CELL = 10.0
 CN_NX = int((CN_TX1 - CN_TX0) / CN_CELL)
 CN_NY = int((CN_TY1 - CN_TY0) / CN_CELL)
@@ -912,8 +972,9 @@ def cn_terrain_h(x, y):
         if d2 < best:
             best, bz, gi = d2, p[2], ki
     d = math.sqrt(best)
-    noise = (sin(x * 0.0031 + 2.1) * cos(y * 0.0027 + 0.4) * 4.0
-             + sin(x * 0.0061) * sin(y * 0.0053) * 2.0)
+    ny = y - CN_OFF_Y  # layout pass: keep the accepted canyon noise field, relocated
+    noise = (sin(x * 0.0031 + 2.1) * cos(ny * 0.0027 + 0.4) * 4.0
+             + sin(x * 0.0061) * sin(ny * 0.0053) * 2.0)
     if d < 12.0:
         w = 1.0 - smoothstep(6.0, 12.0, d)
         return (bz - 0.6) * w + (bz - 0.6 + noise * 0.25) * (1.0 - w)
@@ -939,7 +1000,13 @@ def build_canyon_terrain():
     for iy in range(CN_NY):
         for ix in range(CN_NX):
             faces.append((v(ix, iy), v(ix + 1, iy), v(ix + 1, iy + 1), v(ix, iy + 1)))
-    return mesh_from("canyon_terrain", verts, faces, MAT["terrain"])
+    ob = mesh_from("canyon_terrain", verts, faces, MAT["terrain"])
+    nz = sum((ob.matrix_world.to_3x3() @ p.normal).normalized().z
+             for p in ob.data.polygons)
+    if nz < 0:
+        ob.data.flip_normals()
+        print("TERRAIN_NORMALS_FLIPPED: canyon_terrain")
+    return ob
 
 build_canyon_terrain()
 
@@ -1100,14 +1167,26 @@ world.use_nodes = True
 nt = world.node_tree
 bg = nt.nodes.get("Background")
 sky = nt.nodes.new("ShaderNodeTexSky")
+sky_type = None
+# Blender 5.3 renamed the Nishita model — try known enums, first hit wins.
+# (2026-11-23: "NISHITA" threw here on every 5.3 build and the except
+# SKIPPED THE LINK, baking on the Background's default flat 0.05 grey.)
+for candidate in ("NISHITA", "MULTIPLE_SCATTERING", "SINGLE_SCATTERING",
+                  "PREETHAM", "HOSEK_WILKIE"):
+    try:
+        sky.sky_type = candidate
+        sky_type = candidate
+        break
+    except Exception:
+        continue
 try:
-    sky.sky_type = "NISHITA"
     sky.sun_elevation = radians(35)
     sky.sun_rotation = radians(90)
     sky.sun_intensity = 1.0
-    nt.links.new(sky.outputs[0], bg.inputs[0])
 except Exception as exc:
-    print("SKY_FALLBACK:", exc)
+    print("SKY_PROPS_FALLBACK:", exc)
+nt.links.new(sky.outputs[0], bg.inputs[0])  # link REGARDLESS — a dead
+print("SKY_TYPE:", sky_type)                # world bakes flat-grey ambient
 bg.inputs[1].default_value = 1.0
 scene.world = world
 sun_data = bpy.data.lights.new("sun", type="SUN")
@@ -1238,13 +1317,14 @@ try:
         shot("top", (80, 40, 900), (80, 40, 0), 1800, os.path.join(SHOTS, "track_top.png"))
         shot("startcam", (560, -760, 10), (640, -200, 26), None,
              os.path.join(SHOTS, "track_start.png"))
-        shot("dt_top", (200, 180, 950), (200, 180, 0), 1700,
+        # layout pass: dt/cn shot cameras follow their +6000 offsets
+        shot("dt_top", (6200, 180, 950), (6200, 180, 0), 1700,
              os.path.join(SHOTS, "track_dt_top.png"))
-        shot("dt_start", (-220, -320, 8), (240, 40, 4), None,
+        shot("dt_start", (5780, -320, 8.15), (6240, 40, 4.15), None,
              os.path.join(SHOTS, "track_dt_start.png"))
-        shot("cn_top", (-240, -60, 1050), (-240, -60, 0), 1750,
+        shot("cn_top", (-240, 5940, 1050), (-240, 5940, 0), 1750,
              os.path.join(SHOTS, "track_cn_top.png"))
-        shot("cn_start", (80, -700, 16), (-20, -260, 14), None,
+        shot("cn_start", (80, 5300, 16), (-20, 5740, 14), None,
              os.path.join(SHOTS, "track_cn_start.png"))
 except Exception as exc:
     print("SHOTS_SKIPPED:", exc)

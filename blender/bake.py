@@ -24,12 +24,39 @@ argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 MODE = argv[0] if argv else "--test"
 ENV_NAME = next((a.split("=", 1)[1] for a in argv if a.startswith("--env=")), None)
 GROUPS = {"coastal": 2048, "downtown": 2048, "props": 1024, "canyon": 2048}
-TEST_RES_SCALE = {"coastal": 512, "downtown": 512, "props": 512}
+TEST_RES_SCALE = {"coastal": 512, "downtown": 512, "props": 512, "canyon": 512}
 SAMPLES = {"--test": 64, "--full": 384}
 MARGIN = {"--test": 4, "--full": 8}
+# Bake-rig fill lighting (2026-11-23 sun-only-bake defect fix): every --full
+# bake to date ran with ZERO ambient — shadowed texels collapsed to 0/1.0
+# (downtown road 96.8% dark, props_dt_* 97.6% black) while the env pano
+# rendered minutes later WITH ambient in the same run. Cork's proven rig
+# carries explicit sky-fill lamps; this port dropped them and trusted the
+# HDRI world, which bpy.ops.object.bake does not reliably sample. The fill
+# sun is insurance; verify_env_image + the AMBIENT_GATE are the alarms.
+FILL_ENERGY = 0.5
+WORLD_STRENGTH = 0.2  # calibrated 2026-11-23: MULTIPLE_SCATTERING sky at 1.0
+                      # saturated downtown 98%; sky-only plate measured 0.665
+                      # at strength 0.35 -> 0.2 lands shadow interiors mid-band
+FILL_ANGLE_DEG = 80
+FILL_DIR = (0.35, 0.0, -0.82)  # blender-space travel: from the west sky, downward
 scene = bpy.context.scene
 
 # ---------------- engine ----------------
+def verify_env_image(img):
+    """Force-load env pixels and verify real radiance. Background-mode bakes do
+    NOT reliably trigger Blender's lazy image load — an unloaded env samples
+    BLACK and the whole bake runs sun-only. Explicit --env failures raise."""
+    _ = img.pixels[0]  # touch forces the lazy pixel load
+    if img.size[0] == 0:
+        raise RuntimeError("ENV_VERIFY_FAIL: %s has no pixels" % img.name)
+    mean, mx = image_stats(img)
+    if mean < 0.02 or mx < 0.5:
+        raise RuntimeError("ENV_VERIFY_FAIL: %s mean=%.4f max=%.4f - sky reads black"
+                           % (img.name, mean, mx))
+    print("ENV_VERIFY_OK: %s mean=%.4f max=%.4f" % (img.name, mean, mx))
+
+
 def set_world_env(hdr_path):
     """CC0-policy HDRI in the bake rig: HDRI = ambient/sky env; the sun lamp
     stays for sharp directional shadows."""
@@ -45,7 +72,68 @@ def set_world_env(hdr_path):
     env.image = img
     nt.links.new(env.outputs[0], bg.inputs[0])
     bg.inputs[1].default_value = 1.0
+    verify_env_image(img)
     print("WORLD_ENV:", os.path.basename(hdr_path))
+
+
+def ensure_world_env():
+    """Verify the bake world actually CONTRIBUTES ambient before any bake
+    depends on it. Two silent-killers caught here: (1) an env image whose
+    pixels never loaded (background-mode lazy load), (2) an UNLINKED
+    Background — the Blender 5.3 sky-enum rename made build_track's world
+    link skip, baking on the default flat 0.05 grey. If the Background is
+    unlinked, wire the locked HDRI and verify; never bake on a dead world."""
+    if scene.world is None:
+        scene.world = bpy.data.worlds.new("bake_world")
+        scene.world.use_nodes = True
+    nt = scene.world.node_tree
+    bg = nt.nodes.get("Background")
+
+    def wire_sky():
+        sky = nt.nodes.new("ShaderNodeTexSky")
+        for candidate in ("NISHITA", "MULTIPLE_SCATTERING", "SINGLE_SCATTERING",
+                          "PREETHAM", "HOSEK_WILKIE"):
+            try:
+                sky.sky_type = candidate
+                break
+            except Exception:
+                continue
+        nt.links.new(sky.outputs[0], bg.inputs[0])
+        print("WORLD_RIG: procedural sky wired")
+
+    for n in nt.nodes:
+        if n.type == "TEX_ENVIRONMENT" and n.image:
+            try:
+                verify_env_image(n.image)
+                print("WORLD_RIG: env verified")
+            except RuntimeError as exc:
+                print("ENV_FALLBACK_NISHITA:", exc)
+                img = n.image
+                nt.nodes.remove(n)
+                bpy.data.images.remove(img, do_unlink=True)
+                wire_sky()
+            if bg is not None:
+                bg.inputs[1].default_value = WORLD_STRENGTH
+                print("WORLD_RIG: strength scaled to %.2f" % WORLD_STRENGTH)
+            return
+    if bg is not None and not bg.inputs[0].is_linked:
+        locked = os.path.join(ASSETS, "hdri", "kloofendal_48d_partly_cloudy_puresky.hdr")
+        if os.path.isfile(locked):
+            img = bpy.data.images.load(locked, check_existing=True)
+            img.colorspace_settings.name = "Non-Color"
+            env = nt.nodes.new("ShaderNodeTexEnvironment")
+            env.image = img
+            nt.links.new(env.outputs[0], bg.inputs[0])
+            verify_env_image(img)
+            bg.inputs[1].default_value = WORLD_STRENGTH
+            print("WORLD_RIG: locked HDRI wired over an unlinked Background, "
+                  "strength %.2f" % WORLD_STRENGTH)
+            return
+        raise RuntimeError("WORLD_RIG_FAIL: Background.Color unlinked and no "
+                           "locked HDRI at assets/hdri/ - refusing a flat-grey bake")
+    if bg is not None and bg.inputs[0].is_linked:
+        bg.inputs[1].default_value = WORLD_STRENGTH
+        print("WORLD_RIG: ok (Background linked), strength %.2f" % WORLD_STRENGTH)
 
 def setup_engine(samples):
     scene.render.engine = "CYCLES"
@@ -70,6 +158,22 @@ def setup_engine(samples):
     scene.cycles.use_denoising = False
     scene.view_settings.view_transform = "Standard"  # un-tonemapped bakes
     scene.render.image_settings.file_format = "PNG"
+
+
+def add_fill_rig():
+    """Cork-style explicit sky-fill: one soft wide-angle sun opposing the key
+    sun. Guarantees downwelling ambient in baked light even if the HDRI env
+    fails to contribute. Idempotent; __bake_fill never ships as content."""
+    if bpy.data.objects.get("__bake_fill"):
+        return
+    from mathutils import Vector
+    d = bpy.data.lights.new("__bake_fill", type="SUN")
+    d.energy = FILL_ENERGY
+    d.angle = math.radians(FILL_ANGLE_DEG)
+    ob = bpy.data.objects.new("__bake_fill", d)
+    scene.collection.objects.link(ob)
+    ob.rotation_euler = Vector(FILL_DIR).normalized().to_track_quat("-Z", "Y").to_euler()
+    print("FILL_RIG: energy=%.2f angle=%ddeg dir=%s" % (FILL_ENERGY, FILL_ANGLE_DEG, FILL_DIR))
 
 # ---------------- helpers ----------------
 def group_of(name):
@@ -145,16 +249,22 @@ def shelf_pack(entries):
     raise RuntimeError("shelf_pack overflow for " + str(entries))
 
 def assign_tile_uvs(ob, rect, bbox):
+    """Fit the mesh's UV bbox to its atlas tile INDEPENDENTLY PER AXIS.
+    The old aspect-preserving min-scale crushed the U axis of ribbons whose
+    source v-range is in world meters (roads emit 1 x ~184 -> 0.0006-wide
+    hairline islands; 40 meshes affected — the "black-crushed road"). Per-axis
+    stretch fills the tile instead: maximum texel density on both axes, and
+    the builder's lane-aligned road u (0=left edge .. 1=right edge) survives
+    so the grading wear-bands map correctly."""
     u0, v0, u1, v1 = rect
     bu0, bv0, bu1, bv1 = bbox
-    bw = max(1e-6, bu1 - bu0)
-    bh = max(1e-6, bv1 - bv0)
-    s = min((u1 - u0) / bw, (v1 - v0) / bh)
-    ox = u0 + ((u1 - u0) - bw * s) * 0.5
-    oy = v0 + ((v1 - v0) - bh * s) * 0.5
+    bw = max(1e-9, bu1 - bu0)
+    bh = max(1e-9, bv1 - bv0)
+    su = (u1 - u0) / bw
+    sv = (v1 - v0) / bh
     uv = ob.data.uv_layers.active
     for d in uv.data:
-        d.uv = (ox + (d.uv[0] - bu0) * s, oy + (d.uv[1] - bv0) * s)
+        d.uv = (u0 + (d.uv[0] - bu0) * su, v0 + (d.uv[1] - bv0) * sv)
 
 def fresh_image(name, res, linear):
     old = bpy.data.images.get(name)
@@ -214,6 +324,47 @@ def save_png(img):
     img.file_format = "PNG"
     img.save()
 
+
+def light_gate(img):
+    """Ambient-floor gate on a freshly baked light atlas. R-channel stride-16
+    samples (stride % 4 == 0 lands every sample on the R channel — avoids the
+    documented alpha-inflated stride-997 means). Defect signature this catches:
+    sun-only bakes collapse lit texels to 0/1.0 (bimodal, no mid-tones) because
+    no ambient reached shadowed surfaces. Fails the run loudly instead of
+    shipping black-crushed shadows."""
+    import array
+    n = img.size[0] * img.size[1] * img.channels
+    buf = array.array("f", bytes(4 * n))
+    img.pixels.foreach_get(buf)
+    lit = mid = 0
+    b0 = b1 = b2 = b3 = 0
+    for i in range(0, n, 16):
+        v = buf[i]
+        if v <= 0.02:
+            continue
+        lit += 1
+        if v <= 0.92:
+            mid += 1
+        b8 = min(255, int(v * 255.0 + 0.5))
+        if b8 <= 2:
+            b0 += 1
+        elif b8 <= 59:
+            b1 += 1
+        elif b8 <= 200:
+            b2 += 1
+        else:
+            b3 += 1
+    if lit == 0:
+        raise RuntimeError("AMBIENT_GATE_FAIL: light atlas entirely dark")
+    mid_frac = mid / lit
+    print("AMBIENT_GATE lit_frac=%.4f mid_frac=%.4f buckets8bit(0-2/3-59/60-200/201-255)="
+          "%.3f/%.3f/%.3f/%.3f" % (lit / (n / 16.0), mid_frac,
+                                   b0 / lit, b1 / lit, b2 / lit, b3 / lit))
+    if mid_frac < 0.01:
+        raise RuntimeError("AMBIENT_GATE_FAIL: mid_frac=%.4f < 0.01 - bimodal "
+                           "0/255 light atlas, catastrophic bake failure" % mid_frac)
+    return mid_frac
+
 # ---------------- bake per group ----------------
 def uv_pass(g, objs, res):
     entries = []
@@ -222,6 +373,16 @@ def uv_pass(g, objs, res):
     for ob in objs:
         has_uv = ob.data.uv_layers.active is not None
         bbox = uv_bbox(ob) if has_uv else smart_unwrap(ob)
+        # Degenerate-UV guard (2026-11-23): ribbon meshes whose source UVs
+        # collapse on an axis (builders emit v in world meters, uv_pass's
+        # aspect-fit then crushes u) map to hairline atlas islands — the sweep
+        # found 40 (coastal_road + downtown_road + every guard + deckbar). A
+        # hairline island bakes nothing and renders the whole surface from a
+        # few texels (the "black-crushed road"). Re-unwrap instead of mapping
+        # the collapse into a tile.
+        if has_uv and (bbox[2] - bbox[0] < 1e-3 or bbox[3] - bbox[1] < 1e-3):
+            print("UV_DEGENERATE_REUNWRAP", ob.name)
+            bbox = smart_unwrap(ob)
         side = math.sqrt(area_of(ob) / total)
         infos.append((ob, bbox))
         entries.append((ob.name, side))
@@ -250,15 +411,34 @@ def bake_group(g, objs, res, samples, margin):
                         use_clear=False, margin=margin)
     amean, amax = image_stats(albedo)
 
-    # LIGHT pass — white override, direct+indirect, linear
+    # LIGHT pass — white override, direct+indirect, linear. LOD-staged (Defect
+    # C): coincident _lod1/_lod2 twins self-shadow their full-res originals
+    # (pole stem was 47% dark), so bake full-res with LODs render-hidden, then
+    # the LOD tiles with full hidden — use_clear=False accumulates both into
+    # the one atlas.
     saved = {ob.name: [m for m in ob.data.materials if m] for ob in objs}
     lo = white_override(g, light)
     for ob in objs:
         ob.data.materials.clear()
         ob.data.materials.append(lo)
-    bpy.ops.object.bake(type="DIFFUSE", pass_filter={"DIRECT", "INDIRECT"},
-                        use_clear=False, margin=margin)
+    full = [o for o in objs if not (o.name.endswith("_lod1") or o.name.endswith("_lod2"))]
+    lods = [o for o in objs if o not in full]
+    for stage, hidden in ((full, lods), (lods, full)):
+        if not stage:
+            continue
+        for ob in hidden:
+            ob.hide_render = True
+        bpy.ops.object.select_all(action="DESELECT")
+        for ob in stage:
+            ob.select_set(True)
+        bpy.context.view_layer.objects.active = stage[0]
+        bpy.ops.object.bake(type="DIFFUSE", pass_filter={"DIRECT", "INDIRECT"},
+                            use_clear=False, margin=margin)
+        for ob in hidden:
+            ob.hide_render = False
+    print("LIGHT_STAGES %s full=%d lods=%d" % (g, len(full), len(lods)))
     lmean, lmax = image_stats(light)
+    mid_frac = light_gate(light)
     for ob in objs:
         ob.data.materials.clear()
         for m in saved[ob.name]:
@@ -271,13 +451,14 @@ def bake_group(g, objs, res, samples, margin):
     if ok_l:
         save_png(light)
     print("BAKE_GROUP %s res=%d objs=%d time=%.1fs albedo mean=%.4f max=%.4f %s "
-          "light mean=%.4f max=%.4f %s" % (
+          "light mean=%.4f max=%.4f %s ambient_mid=%.4f" % (
               g, res, len(objs), time.time() - t0, amean, amax,
               "VERIFY_OK" if ok_a else "VERIFY_FAIL",
-              lmean, lmax, "VERIFY_OK" if ok_l else "VERIFY_FAIL"))
+              lmean, lmax, "VERIFY_OK" if ok_l else "VERIFY_FAIL", mid_frac))
     return {"group": g, "res": res,
             "albedo": "albedo_%s.png" % g if ok_a else None,
             "light": "light_%s.png" % g if ok_l else None,
+            "ambient_mid": round(mid_frac, 4),
             "nodes": [o.name for o in objs]}
 
 # ---------------- env panorama (--full) ----------------
@@ -314,8 +495,16 @@ def render_pano():
     scene.render.resolution_y = 1024
     scene.render.image_settings.file_format = "JPEG"
     scene.render.image_settings.quality = 85
+    # the pano is the SHIPPED visible environment (sky background + car IBL):
+    # render it at the natural sky strength, not the bake-calibrated one
+    bg = scene.world.node_tree.nodes.get("Background") if scene.world else None
+    saved_strength = bg.inputs[1].default_value if bg else None
+    if bg is not None:
+        bg.inputs[1].default_value = 1.0
     scene.render.filepath = os.path.join(ASSETS, "env_coast.jpg")
     bpy.ops.render.render(write_still=True)
+    if bg is not None and saved_strength is not None:
+        bg.inputs[1].default_value = saved_strength
     print("PANO_OK", scene.render.filepath)
 
 # ---------------- main ----------------
@@ -326,6 +515,9 @@ if ENV_NAME:
         set_world_env(env_path)
     else:
         print("WORLD_ENV_MISSING:", env_path, "- keeping scene sky")
+ensure_world_env()
+if MODE != "--export-only":
+    add_fill_rig()
 groups = collect_groups()
 print("BAKE_MODE:", MODE, "groups:", {g: len(o) for g, o in groups.items()})
 manifest = {"generated_by": "bake.py", "mode": MODE, "atlas_groups": {}}
