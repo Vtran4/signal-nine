@@ -170,7 +170,48 @@ window.S9 = window.S9 || {};
       // (?lit=1 flips to the Phase 2.0 lit PBR + AO-overlay path)
       if (manifest) {
         S9.applyBakedStatics(tracksGltf.scene, manifest, makeTexLoader(), !!P.lit)
-          .then((n) => { window.__bakeSwap = n; })
+          .then((n) => {
+            window.__bakeSwap = n;
+            // WS-B1d: downtown wet-road mirror — clone the road's material with
+            // the reflection injection, build the MirrorPass on the road plane,
+            // and let speedfx render it each frame before the composer.
+            if (P.lit && P.track === 'downtown' && S9.MirrorPass) {
+              let road = null;
+              tracksGltf.scene.traverse((o) => {
+                if (o.isMesh && o.name === 'downtown_road') road = o;
+              });
+              if (road) {
+                const box = new THREE.Box3().setFromObject(road);
+                const planeY = box.min.y + 0.02;         // road surface plane
+                const mirror = new S9.MirrorPass(renderer, scene, camera, road, planeY);
+                const roadMat = road.material.clone();
+                roadMat.onBeforeCompile = (shader) => {
+                  shader.uniforms.tMirror = { value: mirror.rt.texture };
+                  shader.uniforms.uMirrorMat = { value: mirror.textureMatrix };
+                  shader.uniforms.uWet = { value: 0.42 };  // wet-street reflection strength
+                  shader.vertexShader = shader.vertexShader
+                    .replace('#include <common>',
+                      '#include <common>\nvarying vec4 vMirrorUv;\nuniform mat4 uMirrorMat;')
+                    .replace('#include <fog_vertex>',
+                      '#include <fog_vertex>\nvec4 mwp = modelMatrix * vec4(transformed, 1.0);\nvMirrorUv = uMirrorMat * mwp;');
+                  shader.fragmentShader = shader.fragmentShader
+                    .replace('#include <common>',
+                      '#include <common>\nvarying vec4 vMirrorUv;\nuniform sampler2D tMirror;\nuniform float uWet;')
+                    .replace('#include <fog_fragment>',
+                      'vec3 mrefl = texture2DProj(tMirror, vMirrorUv).rgb;\n' +
+                      'gl_FragColor.rgb = mix(gl_FragColor.rgb, mrefl, uWet);\n' +
+                      '#include <fog_fragment>');
+                };
+                roadMat.needsUpdate = true;
+                road.material = roadMat;
+                roadMirror = mirror;
+                speedfx.mirror = mirror;
+                window.__mirror = true;
+              } else {
+                window.__errors.push({ m: 'B1d: downtown_road mesh not found for mirror', s: 'main.js', l: 0, c: 0, st: '' });
+              }
+            }
+          })
           .catch((e) => {
             // TextureLoader rejects with the raw error Event (no .message) —
             // '[object Event]' hid the failed URL; surface the real cause.
@@ -251,6 +292,16 @@ window.S9 = window.S9 || {};
     }
     window.__assetFlags = { glbCar: !!car.isGlb, glbTrack: !!track.hasGlbStatics, pano: !!envTex, data: !!entry };
 
+    // WS-B1d: downtown wet-road planar mirror — ?lit=1 + downtown only. The
+    // road material gets the reflection injected via onBeforeCompile AFTER the
+    // bake swap resolves (the swap replaces materials), and the mirror render
+    // hooks the per-frame loop through speedfx.mirror.
+    let roadMirror = null;
+    if (P.lit && P.track === 'downtown' && tracksGltf) {
+      const bakeSwapDone = window.__bakeSwap > 0 || true;   // swap is async; inject in its .then below
+      S9._mirrorHook = { scene, renderer, camera };
+    }
+
     const traffic = new S9.Traffic(scene, track, P.seed, trafficGltf);
     traffic.debrisRef = null; // set on the game below once the shared list exists
     traffic.spawnInitial(car.s);
@@ -296,6 +347,7 @@ window.S9 = window.S9 || {};
       camera.updateProjectionMatrix();
       renderer.setSize(innerWidth, innerHeight);
       speedfx.resize(innerWidth, innerHeight);
+      if (speedfx.mirror) speedfx.mirror.resize(innerWidth, innerHeight);  // WS-B1d
     });
 
     let last = performance.now();
@@ -309,6 +361,7 @@ window.S9 = window.S9 || {};
       game.updateDebris(dtRaw);
       S9.tickBeacons(dtRaw);            // shared lightbar/flasher clock
       if (track.lodGroups && (++lodTick % 12 === 0)) track.applyLod(camera.position);
+      if (speedfx.mirror) speedfx.mirror.render();   // WS-B1d: reflection RT first
       speedfx.render();
 
       // frame timing + scaler
