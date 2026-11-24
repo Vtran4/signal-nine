@@ -39,6 +39,11 @@ WORLD_STRENGTH = 0.2  # calibrated 2026-11-23: MULTIPLE_SCATTERING sky at 1.0
                       # saturated downtown 98%; sky-only plate measured 0.665
                       # at strength 0.35 -> 0.2 lands shadow interiors mid-band
 FILL_ANGLE_DEG = 80
+UV_INSET_TEXELS = 4  # post-repair: shelf-pack tiles abut, and the 8px bake
+                     # margin dilates each island into its neighbor's edge
+                     # band (ocean blue spilled into the road island's final
+                     # rows, white into paint fringes). Sampling 4 texels
+                     # inside each tile skips the contaminated rim entirely.
 FILL_DIR = (0.35, 0.0, -0.82)  # blender-space travel: from the west sky, downward
 scene = bpy.context.scene
 
@@ -248,15 +253,25 @@ def shelf_pack(entries):
         scale *= 0.85
     raise RuntimeError("shelf_pack overflow for " + str(entries))
 
-def assign_tile_uvs(ob, rect, bbox):
+def assign_tile_uvs(ob, rect, bbox, inset_uv=0.0):
     """Fit the mesh's UV bbox to its atlas tile INDEPENDENTLY PER AXIS.
     The old aspect-preserving min-scale crushed the U axis of ribbons whose
     source v-range is in world meters (roads emit 1 x ~184 -> 0.0006-wide
     hairline islands; 40 meshes affected — the "black-crushed road"). Per-axis
     stretch fills the tile instead: maximum texel density on both axes, and
     the builder's lane-aligned road u (0=left edge .. 1=right edge) survives
-    so the grading wear-bands map correctly."""
+    so the grading wear-bands map correctly.
+
+    inset_uv shrinks the target rect by that many UV units per edge BEFORE
+    mapping (UV_INSET_TEXELS / atlas_res): shelf-pack tiles abut, and the bake
+    margin dilates each island into its neighbor's edge band — without the
+    inset the client samples the contaminated rim (ocean blue on the road's
+    outer edge). Skipped for degenerate-tiny tiles."""
     u0, v0, u1, v1 = rect
+    u0i, v0i = u0 + inset_uv, v0 + inset_uv
+    u1i, v1i = u1 - inset_uv, v1 - inset_uv
+    if u1i > u0i and v1i > v0i:
+        u0, v0, u1, v1 = u0i, v0i, u1i, v1i
     bu0, bv0, bu1, bv1 = bbox
     bw = max(1e-9, bu1 - bu0)
     bh = max(1e-9, bv1 - bv0)
@@ -370,6 +385,7 @@ def uv_pass(g, objs, res):
     entries = []
     infos = []
     total = sum(area_of(o) for o in objs)
+    inset_uv = UV_INSET_TEXELS / float(res)
     for ob in objs:
         has_uv = ob.data.uv_layers.active is not None
         bbox = uv_bbox(ob) if has_uv else smart_unwrap(ob)
@@ -384,11 +400,11 @@ def uv_pass(g, objs, res):
             print("UV_DEGENERATE_REUNWRAP", ob.name)
             bbox = smart_unwrap(ob)
         side = math.sqrt(area_of(ob) / total)
-        infos.append((ob, bbox))
+        infos.append((ob, bbox, inset_uv))
         entries.append((ob.name, side))
     tiles = shelf_pack(entries)
-    for ob, bbox in infos:
-        assign_tile_uvs(ob, tiles[ob.name], bbox)
+    for ob, bbox, inset_uv in infos:
+        assign_tile_uvs(ob, tiles[ob.name], bbox, inset_uv)
     return tiles
 
 def bake_group(g, objs, res, samples, margin):

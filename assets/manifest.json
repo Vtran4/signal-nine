@@ -1,13 +1,9 @@
 {
   "generated_by": "bake.py",
-  "mode": "--full",
+  "mode": "--export-only",
   "atlas_groups": {
     "coastal": {
-      "group": "coastal",
       "res": 2048,
-      "albedo": "albedo_coastal.png",
-      "light": "light_coastal.png",
-      "ambient_mid": 0.0277,
       "nodes": [
         "coastal_ocean",
         "coastal_paint_w",
@@ -28,14 +24,12 @@
         "coastal_rock_12",
         "coastal_rock_13",
         "coastal_terrain"
-      ]
+      ],
+      "albedo": "albedo_coastal.png",
+      "light": "light_coastal.png"
     },
     "props": {
-      "group": "props",
       "res": 1024,
-      "albedo": "albedo_props.png",
-      "light": "light_props.png",
-      "ambient_mid": 0.3339,
       "nodes": [
         "props_cn_gantry_start",
         "props_cn_guard_0356",
@@ -388,14 +382,12 @@
         "props_sign_chevron_2298_stripes",
         "props_sign_chevron_3662",
         "props_sign_chevron_3662_stripes"
-      ]
+      ],
+      "albedo": "albedo_props.png",
+      "light": "light_props.png"
     },
     "downtown": {
-      "group": "downtown",
       "res": 2048,
-      "albedo": "albedo_downtown.png",
-      "light": "light_downtown.png",
-      "ambient_mid": 0.0353,
       "nodes": [
         "downtown_block_00",
         "downtown_block_01",
@@ -439,14 +431,12 @@
         "downtown_pylon_2328",
         "downtown_road",
         "downtown_underpass"
-      ]
+      ],
+      "albedo": "albedo_downtown.png",
+      "light": "light_downtown.png"
     },
     "canyon": {
-      "group": "canyon",
       "res": 2048,
-      "albedo": "albedo_canyon.png",
-      "light": "light_canyon.png",
-      "ambient_mid": 0.1105,
       "nodes": [
         "canyon_paint_w",
         "canyon_paint_y",
@@ -472,7 +462,9 @@
         "canyon_rock_18",
         "canyon_rock_19",
         "canyon_terrain"
-      ]
+      ],
+      "albedo": "albedo_canyon.png",
+      "light": "light_canyon.png"
     }
   }
 }
