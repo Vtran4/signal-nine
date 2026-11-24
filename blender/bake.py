@@ -39,11 +39,12 @@ WORLD_STRENGTH = 0.2  # calibrated 2026-11-23: MULTIPLE_SCATTERING sky at 1.0
                       # saturated downtown 98%; sky-only plate measured 0.665
                       # at strength 0.35 -> 0.2 lands shadow interiors mid-band
 FILL_ANGLE_DEG = 80
-UV_INSET_TEXELS = 4  # post-repair: shelf-pack tiles abut, and the 8px bake
-                     # margin dilates each island into its neighbor's edge
-                     # band (ocean blue spilled into the road island's final
-                     # rows, white into paint fringes). Sampling 4 texels
-                     # inside each tile skips the contaminated rim entirely.
+UV_INSET_TEXELS = 12  # post-repair: shelf-pack tiles abut, and the 8px bake
+                      # margin dilates each island into its neighbor's edge
+                      # band. pm's texel scans measured 6-7 texels of bleed
+                      # (ocean blue into the road island's final rows); 4 was
+                      # inside the blue, 12 clears the 8px worst case with
+                      # margin. Acceptance: road v1-edge B-R < 15 at every u.
 FILL_DIR = (0.35, 0.0, -0.82)  # blender-space travel: from the west sky, downward
 scene = bpy.context.scene
 
