@@ -65,6 +65,13 @@ window.S9 = window.S9 || {};
       if (embedded) tc.bundle++; else tc.fallback++;
       new THREE.TextureLoader().load(src, (t) => {
         if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+        t.flipY = false;   // atlas UVs are glTF-convention (top-left origin);
+                           // TextureLoader's default flipY=true mirrored every
+                           // atlas row — latent since the first atlas because
+                           // pre-repair islands were flip-invariant (black
+                           // roads / blown facades / uniform ocean read the
+                           // same under either convention). Diagnosed by the
+                           // bake-repair round's region fingerprints.
         t.anisotropy = 8;
         res(t);
       }, undefined, rej);
