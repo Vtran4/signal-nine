@@ -157,8 +157,9 @@ window.S9 = window.S9 || {};
     startRace() {
       this.cleanupRace();
       const car = this.car;
-      car.s = 30; car.lateral = 1.8; car.speed = 0;
-      car.heading = this.track.tangentYawAt(30); car.slip = 0;
+      const gridS = this.track.closed ? 30 : 54;   // sprint grid at s 54: rivals land 45..9, no clamp pinch
+      car.s = gridS; car.lateral = 1.8; car.speed = 0;
+      car.heading = this.track.tangentYawAt(gridS); car.slip = 0;
       car.boost = { meter: 0, active: false, chain: 0, ease: 0 };
       car.crashed = 0; car.invuln = 0;
       car.stats = { nearMisses: 0, oncomingTime: 0, driftTime: 0, topMph: 0, burnouts: 0, crashes: 0 };

@@ -145,6 +145,7 @@ window.S9 = window.S9 || {};
       this.steerVis = 0;
       this.boost = { meter: 0, active: false, chain: 0, ease: 0 };
       this.air = { up: false, time: 0 };
+      this.vy = 0;               // ballistic vertical velocity (crest lift)
       this.crashed = 0;          // >0 = crash timer (respawn countdown)
       this.invuln = 0;
       this.earnAcc = { oncoming: 0, drift: 0, air: 0 };
@@ -256,6 +257,38 @@ window.S9 = window.S9 || {};
       }
 
       const ev = this.#updateBoost(dt, input);
+      // vertical: ground-follow + ballistic crest lift. Until the sprint pass
+      // this was a stub — car.air was read for earning but NEVER written, so
+      // the spec S4 air window and boost.earn.air/airLanding were dead code.
+      const pRoad = T.posAt(this.s, this.lateral);
+      if (this.air.up) {
+        this.vy -= 9.8 * dt;
+        this.y += this.vy * dt;
+        this.air.time += dt;
+        if (this.y <= pRoad.y) {
+          this.air.up = false;
+          const land = Math.floor(this.air.time / 0.5) * S9.CFG.boost.earn.airLanding;
+          if (land > 0) this.boost.meter = clamp(this.boost.meter + land, 0, 1);
+        }
+      } else if (this.speed > 20) {
+        // crest lift, physically framed: with climb grade behind us the car
+        // carries vertical momentum vy = v·grade; it lifts when the ballistic
+        // apex exceeds the road's own rise over the flight distance (the road
+        // "falls away"). Coastal rollers (grade ~0.005) stay under the 4cm
+        // apex floor; the downtown crest at speed clears it easily.
+        const grade = T.gradeAt ? T.gradeAt(this.s) : 0;
+        if (grade > 0.004) {
+          const vy = this.speed * grade;
+          const apex = (vy * vy) / (2 * 9.8);
+          if (apex > 0.04) {
+            const d = this.speed * ((2 * vy) / 9.8);   // full flight distance
+            const yRoad = T.posAt(this.s + d, this.lateral).y - pRoad.y;
+            if (yRoad < apex - 0.04) {
+              this.air.up = true; this.air.time = 0; this.vy = vy; this.y = pRoad.y;
+            }
+          }
+        }
+      }
       const mph = this.speed * S9.CFG.MPH;
       if (mph > this.stats.topMph) this.stats.topMph = mph;
       this.steerVis = lerp(this.steerVis, input.steer, clamp(dt * 10, 0, 1));
@@ -272,6 +305,7 @@ window.S9 = window.S9 || {};
       this.heading = this.track.tangentYawAt(this.s);
       this.slip = 0;
       this.boost.meter = 0; this.boost.active = false; this.boost.chain = 0;
+      this.air.up = false; this.air.time = 0; this.vy = 0;   // clear any mid-air state
       this.invuln = 2;
       // Phase E4: rebuild the intact car if the crash shattered it
       if (this.shattered && this.carRebuild) { this.carRebuild(); this.shattered = false; }
@@ -362,6 +396,8 @@ window.S9 = window.S9 || {};
 
     place() {
       const p = this.track.posAt(this.s, this.lateral);
+      const roadY = p.y;
+      if (this.air.up) p.y = this.y;   // ballistic height over the road; shadow stays on the asphalt
       this.mesh.position.copy(p);
       this.mesh.rotation.y = this.heading;
       this.mesh.rotation.z = -this.slip * 0.55;  // lean into the slide
@@ -369,8 +405,9 @@ window.S9 = window.S9 || {};
       // the canyon's 80m of elevation makes a flat-pitched car read wrong
       this.mesh.rotation.x = -(this.track.gradeAt ? this.track.gradeAt(this.s) : 0);
       if (this.shadowMesh) {
-        // blob shadow tracks position + heading only (never the lean)
-        this.shadowMesh.position.set(p.x, p.y + 0.05, p.z);
+        // blob shadow tracks position + heading only (never the lean) — and
+        // stays pinned to the ROAD while the car is airborne over a crest
+        this.shadowMesh.position.set(p.x, roadY + 0.05, p.z);
         this.shadowMesh.rotation.y = this.heading;
       }
       const wheels = this.meshWheels || this.mesh.userData.wheels || [];

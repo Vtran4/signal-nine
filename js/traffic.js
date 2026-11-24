@@ -73,6 +73,12 @@ window.S9 = window.S9 || {};
         this.protoPick = () => this.r.pick(this.protos);
       }
       this.playerS = 0;
+      // Downtown Sprint section shaping: zone tables bias respawns toward the
+      // spec's pockets/corridors; excludes keep junction bubbles and the crest
+      // runway clean. Null on every other track — legacy behavior untouched.
+      const sprint = track.id === 'downtown';
+      this.zones = sprint ? this.cfg.sprintZones : null;
+      this.excludes = sprint ? this.cfg.sprintExcludes : null;
     }
 
     spawnInitial(playerS) {
@@ -87,7 +93,39 @@ window.S9 = window.S9 || {};
   // roads is the inner oncoming lane, guarded by the oncoming-clearance check.
   #spawn(playerS, offsetHint) {
       const proto = this.protoPick();
-      const dir = this.r() < 0.65 ? 1 : -1;                   // coastal highway: mostly with-traffic
+      // zone-directed spawn (downtown sprint): pick a target s weighted by the
+      // section tables, bias traffic direction per zone kind, veto excludes
+      let targetS;
+      let dir = this.r() < 0.65 ? 1 : -1;                   // coastal highway: mostly with-traffic
+      if (this.zones && this.zones.length) {
+        const lo = playerS + 50, hi = Math.min(playerS + 460, this.track.length - 10);
+        if (hi > lo) {
+          const cands = [];
+          for (const z of this.zones) {
+            const a = Math.max(z.from, lo), b = Math.min(z.to, hi);
+            if (a < b) cands.push({ a, b, w: z.w, kind: z.kind });
+          }
+          if (cands.length) {
+            const total = 1 + cands.reduce((s, z) => s + z.w, 0);   // 1 = default window fill
+            let pick = this.r() * total, chosen = null;
+            for (const z of cands) { pick -= z.w; if (pick <= 0) { chosen = z; break; } }
+            if (chosen) {
+              if (chosen.kind === 'oncoming') dir = this.r() < 0.8 ? -1 : 1;
+              else dir = this.r() < 0.85 ? 1 : -1;
+            }
+            // sample; junction bubbles / crest runway veto the sample (a few
+            // tries, falling back to the plain window on repeated vetoes)
+            let s = null;
+            for (let tries = 0; tries < 6; tries++) {
+              const c = chosen && (tries === 0 || chosen.kind === 'any') ? chosen : null;
+              const rng_ = c || { a: lo, b: hi };
+              const cand = this.r.range(rng_.a, rng_.b);
+              if (!(this.excludes || []).some(x => cand > x.from && cand < x.to)) { s = cand; break; }
+            }
+            targetS = s !== null ? s : this.r.range(lo, hi);
+          }
+        }
+      }
       // with-traffic rides the outer right lane; oncoming the outer left lane
       let lane;
       if (dir > 0) {
@@ -101,7 +139,9 @@ window.S9 = window.S9 || {};
       mesh.traverse((o) => { if (/wheel/i.test(o.name || '')) { o.rotation.order = 'YXZ'; wheels.push(o); } });
       this.scene.add(mesh);
       const L = this.track.length;
-      let s = (playerS + (dir > 0 ? 40 : 0) + offsetHint + this.r.range(0, 40));
+      let s = targetS !== undefined
+        ? targetS
+        : (playerS + (dir > 0 ? 40 : 0) + offsetHint + this.r.range(0, 40));
       s = this.track.closed ? s % L : clamp(s, 10, L - 10);
       this.cars.push({
         mesh, s, lane, dir, wheels,
@@ -161,6 +201,16 @@ window.S9 = window.S9 || {};
           }
         } else c.pacedT = 0;
         const p = this.track.posAt(c.s, c.lane);
+        // sprint excludes enforced at UPDATE time, not just spawn time: initial
+        // traffic drifts forward into the crest runway before the player gets
+        // there, so parked/transiting cars inside an exclude are recycled —
+        // the density keeper respawns them outside (spec §2 junction bubbles
+        // and the §S4 clean crest runway)
+        if (this.excludes && this.excludes.some(x => c.s > x.from && c.s < x.to)) {
+          this.scene.remove(c.mesh);
+          this.cars.splice(i, 1);
+          continue;
+        }
         c.mesh.position.copy(p);
         c.mesh.rotation.y = this.track.tangentYawAt(c.s) + (c.dir < 0 ? Math.PI : 0);
         for (const w of c.wheels) w.rotation.x += c.speed * dt / 0.34; // rolling on the shared axle radius

@@ -99,6 +99,26 @@ window.S9 = window.S9 || {};
       speedMin: 14, speedMax: 23,
       colors: [0xb8b2a6, 0x6f7d8c, 0x7a4f3a, 0x9aa77e, 0x51616f, 0xcfc7b8],
       nearMissCooldown: 1.2,
+      // Downtown Sprint section config (spec §2/§3, committed ab77e46) — consumed
+      // by traffic.js when track.id === 'downtown'. Zones BIAS respawns toward
+      // the named s-ranges (w = weight); excludes veto any spawn inside them.
+      sprintZones: [
+        { from: 120,  to: 280,  kind: 'pocket',   w: 3 },   // S1 opening near-miss pocket
+        { from: 200,  to: 300,  kind: 'junction', w: 2 },   // pre-J1 corridor
+        { from: 800,  to: 902,  kind: 'junction', w: 2 },   // pre-J2 corridor
+        { from: 940,  to: 1360, kind: 'oncoming', w: 3 },   // S3 oncoming corridor
+        { from: 1080, to: 1340, kind: 'pocket',   w: 3 },   // S3 3-4 car pocket
+        { from: 1310, to: 1414, kind: 'junction', w: 2 },   // pre-J3 corridor
+        { from: 2350, to: 2540, kind: 'pocket',   w: 3 },   // S5 descent run-in
+        { from: 2480, to: 2586, kind: 'junction', w: 2 },   // pre-J4 corridor
+      ],
+      sprintExcludes: [         // junction clean bubbles (s ±30) + S4 crest air runway
+        { from: 270,  to: 330 },
+        { from: 872,  to: 932 },
+        { from: 1384, to: 1444 },
+        { from: 2556, to: 2616 },
+        { from: 1850, to: 2080 },
+      ],
     },
 
     physics: {

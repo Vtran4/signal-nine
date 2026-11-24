@@ -74,7 +74,8 @@ window.S9 = window.S9 || {};
         }, RIVAL_CFG_TWEAK[spec.name] || {});
         const rival = new S9.Car(this.track, cfg);
         const L = this.track.length;
-        rival.s = this.track.closed ? ((30 - 9 - i * 9) + L) % L : clamp(30 - 9 - i * 9, 2, L - 2);
+        const gridBase = this.track.closed ? 30 : 54;   // sprint grid: start s 54 (spec §4 pinch fix — old base 30 clamped rivals 4/5 onto s=2)
+        rival.s = this.track.closed ? ((gridBase - 9 - i * 9) + L) % L : clamp(gridBase - 9 - i * 9, 2, L - 2);
         rival.lateral = (i % 2 === 0 ? -1.8 : 1.8); // two-column grid, clear of the pole lane
         rival.heading = this.track.tangentYawAt(rival.s);
         rival.place();
