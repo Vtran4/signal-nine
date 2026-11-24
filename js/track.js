@@ -59,7 +59,7 @@ window.S9 = window.S9 || {};
     const groups = manifest.atlas_groups || {};
     const nodeToGroup = {};
     for (const g in groups) for (const n of groups[g].nodes || []) nodeToGroup[n] = g;
-    const GAIN = { coastal: 2.4, props: 2.2, canyon: 1.4 };
+    const GAIN = { coastal: 2.4, props: 1.78, canyon: 1.39, downtown: 1.01 };  // re-solved post-rebake by tools/solve_gain.py (relative anchor, gain_targets.json snapshot)
     return Promise.all(Object.keys(groups).map((g) =>
       Promise.all([loadTex(groups[g].albedo, true), loadTex(groups[g].light, false)])
         .then(([a, l]) => [g, S9.composeMaterial(a, l, GAIN[g] || 2.4, 0.12)])
