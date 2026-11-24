@@ -68,7 +68,9 @@ window.S9 = window.S9 || {};
     return g;
   }
 
-  // Build a hero-car group from cars.glb. Modeler contract: node names
+  // Build a hero-car group from cars.glb. Modeler contract v2 (adds the Phase 2.0
+  // gt3 hero; eject list extended with wing|splitter — see shatterVia):
+  // node names
   // `<tok>_body/glass/hood/spoiler/lights_f/lights_r/bumper_f/bumper_r/wheel_fl|fr|rl|rr`,
   // paint material slots paint_<tok>. Wheel + rim ship as hub-local sibling
   // node pairs (`_wheel_*` + `_rim_*`) — both must ride the spin/steer arrays
@@ -76,17 +78,21 @@ window.S9 = window.S9 || {};
   // The police cruiser rides the same contract plus a lightbar:
   // `police_lightbar_red` / `police_lightbar_blue` lens nodes pulse in
   // alternation (same pulse loop as the crash flashers).
+  // gt3 (Phase 2.0 WS-A): one body, 9 livery variants — ships keepAuthored
+  // (livery lives in the glb's materials per the visual-only livery schema);
+  // variant switching swaps materials via setLivery, never stats.
   // beacon clock: one shared phase for the police lightbar pulse
   S9.BEACON_T = 0;
   S9.tickBeacons = (dt) => { S9.BEACON_T += dt; };
   S9.buildCarFromGltf = function (gltf, classId, paintOverride) {
-    const tok = ({ street: 'street', perf: 'perf', super: 'super', police: 'police', warhawk: 'warhawk', halberd: 'halberd' })[classId] || 'street';
+    const tok = ({ street: 'street', perf: 'perf', super: 'super', police: 'police', warhawk: 'warhawk', halberd: 'halberd', gt3: 'gt3' })[classId] || 'street';
     const group = new THREE.Group();
     const wheels = [], front = [];
     const isPolice = classId === 'police';
-    // authored-paint cars (police two-tone, rivals' distinct hues) keep their
-    // glb colors; the three M1 heroes take the class paint
-    const keepAuthored = isPolice || classId === 'warhawk' || classId === 'halberd';
+    // authored-paint cars (police two-tone, rivals' distinct hues, the gt3's
+    // livery materials) keep their glb colors; the three M1 heroes take the
+    // class paint
+    const keepAuthored = isPolice || classId === 'warhawk' || classId === 'halberd' || classId === 'gt3';
     const paintColor = paintOverride || ({ street: 0xd8452e, perf: 0x2fb7a9, super: 0xf2f0e6, police: 0xf2f2f0, warhawk: 0x2456c8, halberd: 0x8a7a5a })[classId] || 0xcccccc;
     const beacons = { red: [], blue: [] };
     for (const node of gltf.scene.children) {
@@ -354,7 +360,10 @@ window.S9 = window.S9 || {};
       const hulls = [];
       this.mesh.traverse((o) => {
         if (!o.isMesh || !o.name) return;
-        if (/bumper_f|bumper_r|hood|spoiler/.test(o.name) || /wheel_|rim_/.test(o.name)) parts.push(o);
+        // eject contract v2 (Phase 2.0): wing|splitter join the detach list for
+        // the gt3 hero (swan-neck wing + splitter are natural crash parts);
+        // spoiler stays for the legacy bodies. Everything else = hull.
+        if (/bumper_f|bumper_r|hood|spoiler|wing|splitter/.test(o.name) || /wheel_|rim_/.test(o.name)) parts.push(o);
         else hulls.push(o);   // body/glass/roof — the smashed-metal pass
       });
       for (const part of parts) {
