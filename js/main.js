@@ -129,8 +129,9 @@ window.S9 = window.S9 || {};
       scene.add(tracksGltf.scene);
       track.oncomingEdge = track.laneDodge + 0.3;
       // baked atlases: unlit compose materials per manifest node lists
+      // (?lit=1 flips to the Phase 2.0 lit PBR + AO-overlay path)
       if (manifest) {
-        S9.applyBakedStatics(tracksGltf.scene, manifest, makeTexLoader())
+        S9.applyBakedStatics(tracksGltf.scene, manifest, makeTexLoader(), !!P.lit)
           .then((n) => { window.__bakeSwap = n; })
           .catch((e) => {
             // TextureLoader rejects with the raw error Event (no .message) —

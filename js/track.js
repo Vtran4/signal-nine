@@ -55,14 +55,33 @@ window.S9 = window.S9 || {};
 
   // Apply bake.py's manifest: node lists -> atlas group materials. Returns a
   // promise for the number of meshes swapped. loadTex(name, srgb) supplied by main.
-  S9.applyBakedStatics = function (staticRoot, manifest, loadTex) {
+  // lit=true (Phase 2.0 WS-B1, ?lit=1): the statics go LIVE — MeshStandardMaterial
+  // with the albedo as map and the baked light atlas demoted to an AO overlay
+  // (channel 0), responding to the scene's real lights instead of the unlit
+  // albedo×light×gain compose. GAIN path retired under the flag; swap count
+  // contract unchanged (436/436).
+  S9.applyBakedStatics = function (staticRoot, manifest, loadTex, lit) {
     const groups = manifest.atlas_groups || {};
     const nodeToGroup = {};
     for (const g in groups) for (const n of groups[g].nodes || []) nodeToGroup[n] = g;
     const GAIN = { coastal: 2.4, props: 1.78, canyon: 1.39, downtown: 1.01 };  // re-solved post-rebake by tools/solve_gain.py (relative anchor, gain_targets.json snapshot)
     return Promise.all(Object.keys(groups).map((g) =>
       Promise.all([loadTex(groups[g].albedo, true), loadTex(groups[g].light, false)])
-        .then(([a, l]) => [g, S9.composeMaterial(a, l, GAIN[g] || 2.4, 0.12)])
+        .then(([a, l]) => {
+          let m;
+          if (lit) {
+            l.channel = 0;                     // single-UV glb: AO rides uv0 with the albedo
+            m = new THREE.MeshStandardMaterial({
+              map: a,                          // sRGB albedo
+              aoMap: l,                        // baked light demoted to AO overlay
+              aoMapIntensity: 1.15,
+              roughness: 0.92, metalness: 0.0, // asphalt/concrete/carbon-statics class
+            });
+          } else {
+            m = S9.composeMaterial(a, l, GAIN[g] || 2.4, 0.12);
+          }
+          return [g, m];
+        })
     )).then((pairs) => {
       const mats = {};
       for (const [g, m] of pairs) mats[g] = m;
