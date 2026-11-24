@@ -88,8 +88,11 @@ def main():
     for glb in sorted(glob.glob(os.path.join(ASSETS, "*.glb"))):
         names.append(os.path.basename(glb))
     names.append("manifest.json")
-    # spline data + env panorama ride in the bundle too (file:// has no fetch)
-    for extra in ("tracks_data.json", "env_coast.jpg"):
+    # spline data + env panorama + livery config ride in the bundle too
+    # (file:// has no fetch — the gt3 livery JSON is consumer-critical, and a
+    # relative fetch on file:// is the crossOrigin failure class that cost us
+    # the white-texture round; pm-s9 ruling: consumer + embed land together)
+    for extra in ("tracks_data.json", "env_coast.jpg", "gt3_liveries.json"):
         if os.path.exists(os.path.join(ASSETS, extra)):
             names.append(extra)
 

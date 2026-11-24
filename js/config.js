@@ -30,6 +30,15 @@ window.S9 = window.S9 || {};
       wheelbase: 2.60, trackWidth: 1.64, rideHeight: 0.10,
     },
     {
+      id: 'gt3', name: 'VANTORO GT3-E', cls: 'Super', clsName: 'VANTORO GT3-E',
+      topSpeed: 88,              // ~197 mph — GT3-class: fast, sharp, less brutal than GT1
+      boostTop: 101,
+      accel: 11.5, brake: 18, engineBrake: 2.6,
+      steerRate: 2.5, grip: 8.2, driftGrip: 3.0, driftYaw: 1.35,
+      mass: 1120, paint: 0xc81e14, paintName: 'Vantoro Factory Red', flake: 0.4,
+      wheelbase: 2.60, trackWidth: 2.00, rideHeight: 0.10, // modeler WS-A locked ratios (L 4.55 / WB 2.60 / W 2.0)
+    },
+    {
       id: 'super', name: 'APEX GT1', cls: 'Super', clsName: 'APEX GT1',
       topSpeed: 91.5,            // ~205 mph
       boostTop: 106,             // ~237 mph — F-Zero territory
@@ -63,7 +72,7 @@ window.S9 = window.S9 || {};
       lockres: bool('lockres'),                 // pin the dynamic-resolution scaler
       lit: bool('lit'),                         // ?lit=1 — Phase 2.0 WS-B1 lit statics:
                                                 // compose material -> PBR + light-atlas AO
-      car: inSet('car', ['street', 'perf', 'super', 'police'], 'street'),
+      car: inSet('car', ['street', 'perf', 'super', 'gt3', 'police'], 'street'),
     },
 
     palette: {

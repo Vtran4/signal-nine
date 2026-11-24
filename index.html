@@ -110,6 +110,12 @@
                     color: var(--ink); background: transparent; border: 2px solid var(--ink); cursor: pointer; }
   #track-row .trk:hover { background: var(--sun); }
   #track-row .trk.on { background: var(--ink); color: var(--cream); }
+  #car-row { display: flex; gap: 8px; justify-content: center; margin: 4px 0 2px; }
+  #car-row .trk { display: inline-block; width: auto; margin: 0; padding: 7px 14px;
+                  font-family: 'Barlow Condensed', sans-serif; font-size: 13px; letter-spacing: .12em;
+                  color: var(--ink); background: transparent; border: 2px solid var(--ink); cursor: pointer; }
+  #car-row .trk:hover { background: var(--sun); }
+  #car-row .trk.on { background: var(--ink); color: var(--cream); }
   #menu-art { width: 320px; height: 10px; margin: 0 auto 18px;
               background: linear-gradient(90deg, var(--sky), var(--sun) 60%, var(--gold)); }
 
@@ -151,6 +157,12 @@
     <button id="btn-play">Start run</button>
     <button id="btn-race">Start race &mdash; 6 cars</button>
     <button id="btn-crash">Crash junction</button>
+    <div id="car-row">
+      <button class="trk" data-car="street">RS</button>
+      <button class="trk" data-car="perf">KESTREL</button>
+      <button class="trk" data-car="gt3">GT3-E</button>
+      <button class="trk" data-car="super">GT1</button>
+    </div>
     <div id="track-row">
       <button class="trk" data-track="coastal">COASTAL</button>
       <button class="trk" data-track="downtown">DOWNTOWN</button>

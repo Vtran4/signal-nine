@@ -1,0 +1,82 @@
+{
+  "car": "gt3",
+  "schema": 1,
+  "visualOnly": true,
+  "sharedGeometry": true,
+  "comment": "WS-A livery config v1 draft (modeler-s9). One GT3 body, 9 variants; geometry is shared and never cloned - switching swaps the paint_gt3 material parameters only (setLivery). Stats stay per-roster-slot (rivals keep their own pace); this file is visual + reward-UI identity only. Fictional names/sponsors only - no real brands.",
+  "slots": {
+    "paint": "paint_gt3",
+    "accentNote": "accent is OPTIONAL v2 headroom (endplates/calipers/pinstripe); v1 consumers may ignore it - authored accent materials stay as-is unless setLivery opts in"
+  },
+  "defaults": {
+    "metallic": 0.85,
+    "roughness": 0.32,
+    "clearcoat": 1.0,
+    "flake": 0.35
+  },
+  "variants": [
+    {
+      "id": "vantoro_factory",
+      "name": "Vantoro Factory",
+      "ui": "#d43524",
+      "paint": {"base": "#c81e14", "flake": 0.4},
+      "accent": {"base": "#15161a"}
+    },
+    {
+      "id": "kestrel_racing",
+      "name": "Kestrel Racing",
+      "ui": "#2f7fd4",
+      "paint": {"base": "#e8e9ee", "flake": 0.2, "roughness": 0.28},
+      "accent": {"base": "#1c4d8f"}
+    },
+    {
+      "id": "apex_gt_service",
+      "name": "Apex GT Service",
+      "ui": "#c9a227",
+      "paint": {"base": "#101014", "flake": 0.55, "roughness": 0.24},
+      "accent": {"base": "#c9a227"}
+    },
+    {
+      "id": "signal_nine",
+      "name": "Signal Nine",
+      "ui": "#ff7a18",
+      "paint": {"base": "#ff7a18", "flake": 0.45},
+      "accent": {"base": "#0c0c10"}
+    },
+    {
+      "id": "sunset_coastal",
+      "name": "Sunset Coastal",
+      "ui": "#18b5a4",
+      "paint": {"base": "#0f8f83", "flake": 0.3, "roughness": 0.36},
+      "accent": {"base": "#f2efe6"}
+    },
+    {
+      "id": "nightline",
+      "name": "Nightline",
+      "ui": "#8f4fd4",
+      "paint": {"base": "#241a3d", "flake": 0.6, "roughness": 0.22},
+      "accent": {"base": "#b04ff0"}
+    },
+    {
+      "id": "gilded_mallard",
+      "name": "Gilded Mallard",
+      "ui": "#3f9e3a",
+      "paint": {"base": "#256e28", "flake": 0.35},
+      "accent": {"base": "#d8b13c"}
+    },
+    {
+      "id": "ronin_silver",
+      "name": "Ronin Silver",
+      "ui": "#b8bfc9",
+      "paint": {"base": "#aeb6c2", "flake": 0.5, "roughness": 0.2},
+      "accent": {"base": "#b01818"}
+    },
+    {
+      "id": "saturn_lime",
+      "name": "Saturn Lime",
+      "ui": "#a4d418",
+      "paint": {"base": "#9ec41a", "flake": 0.4},
+      "accent": {"base": "#1a2016"}
+    }
+  ]
+}

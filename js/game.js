@@ -84,6 +84,15 @@ window.S9 = window.S9 || {};
           location.search = params.toString();
         });
       });
+      // car chips: same pattern — the boot assembles the car from ?car
+      const curCar = params.get('car') || 'street';
+      document.querySelectorAll('#car-row .trk').forEach((el) => {
+        el.classList.toggle('on', el.dataset.car === curCar);
+        el.addEventListener('click', () => {
+          params.set('car', el.dataset.car);
+          location.search = params.toString();
+        });
+      });
       b('btn-resume', () => this.togglePause());
       b('btn-restart', () => {
         this.togglePause();

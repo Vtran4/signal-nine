@@ -31,6 +31,21 @@ window.S9 = window.S9 || {};
     return null;
   }
 
+  // gt3 livery config (Phase 2.0 WS-A): bundle-first, NEVER a bare relative
+  // fetch — file:// has no fetch and the relative-fetch failure class cost us
+  // the white-texture round (pm-s9 ruling: consumer + embed land together)
+  function loadLiveries() {
+    const A = window.__S9_ASSETS;
+    if (A && A['gt3_liveries.json']) {
+      try { return JSON.parse(new TextDecoder().decode(fromB64('gt3_liveries.json'))); }
+      catch (e) { window.__errors.push({ m: 'livery json: ' + (e && e.message || e), s: 'main.js', l: 0, c: 0, st: '' }); return null; }
+    }
+    try {
+      const r = fetch('assets/gt3_liveries.json').then(x => x.ok ? x.json() : null);
+      return r;
+    } catch (e) { return null; }
+  }
+
   function loadGltf(name) {
     return new Promise((res) => {
       const buf = fromB64(name);
@@ -133,8 +148,8 @@ window.S9 = window.S9 || {};
     }
 
     const trackData = await loadTrackData();
-    const [tracksGltf, carsGltf, trafficGltf, policeGltf, rivalsGltf, envTex, manifest] = await Promise.all([
-      loadGltf('tracks.glb'), loadGltf('cars.glb'), loadGltf('traffic.glb'), loadGltf('police.glb'), loadGltf('rivals.glb'), loadEnv(), loadManifest()]);
+    const [tracksGltf, carsGltf, trafficGltf, policeGltf, rivalsGltf, envTex, manifest, gt3Gltf, liveries] = await Promise.all([
+      loadGltf('tracks.glb'), loadGltf('cars.glb'), loadGltf('traffic.glb'), loadGltf('police.glb'), loadGltf('rivals.glb'), loadEnv(), loadManifest(), loadGltf('gt3.glb'), loadLiveries()]);
     // slot tints for the dressing props (wood crates, metal racks/stacks) —
     // the glb ships them unlit-flat; warm wood + steel reads weathered
     for (const node of trafficGltf.scene.children) node.traverse((o) => {
@@ -196,7 +211,32 @@ window.S9 = window.S9 || {};
     const car = new S9.Car(track, carCfg);
     scene.add(car.mesh);
     if (car.shadowMesh) scene.add(car.shadowMesh);
-    if (carsGltf && carCfg.id !== 'police') {
+    if (gt3Gltf && carCfg.id === 'gt3') {
+      const old = car.mesh;
+      car.swapMesh(S9.buildCarFromGltf(gt3Gltf, 'gt3'));
+      scene.remove(old);
+      scene.add(car.mesh);
+      car.isGlb = true;
+      // WS-A livery consumer: swap paint_gt3 parameters off the visual-only
+      // livery JSON (schema 1: paint base/flake per variant; defaults carry
+      // metallic/roughness/clearcoat). Variant = ?livery=<id> or default v1.
+      if (liveries && liveries.variants) {
+        const q = new URLSearchParams(location.search);
+        const want = q.get('livery');
+        const v = liveries.variants.find(x => x.id === want) || liveries.variants[0];
+        const d = liveries.defaults || {};
+        car.mesh.traverse((o) => {
+          if (o.isMesh && o.material && o.material.name === 'paint_gt3') {
+            const p = Object.assign({}, d, v.paint || {});
+            if (p.base) o.material.color = new THREE.Color(p.base);
+            if (p.flake !== undefined) o.material.metalness = 0.45 + (p.flake - 0.35) * 0.5;
+            if (p.roughness !== undefined) o.material.roughness = p.roughness;
+            o.material.name = 'paint_gt3';
+          }
+        });
+        window.__livery = v.id;
+      }
+    } else if (carsGltf && carCfg.id !== 'police') {
       const old = car.mesh;
       car.swapMesh(S9.buildCarFromGltf(carsGltf, carCfg.id));
       scene.remove(old);
