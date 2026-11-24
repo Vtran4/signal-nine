@@ -92,6 +92,57 @@ window.S9 = window.S9 || {};
           swapped++;
         }
       });
+      // WS-B1c: procedural lit-window emissive for downtown blocks — the
+      // interim night-city content until modeler's WS-B2 emissive atlas lands
+      // (which slots into this same material.emissiveMap). One atlas-space
+      // canvas; each block's uv rect gets a seeded window grid, so the shared
+      // material samples each block's OWN windows through its uv rect.
+      if (lit && mats.downtown) {
+        const E = 1024;
+        const cv = document.createElement('canvas'); cv.width = E; cv.height = E;
+        const cx = cv.getContext('2d');
+        cx.fillStyle = '#000000'; cx.fillRect(0, 0, E, E);
+        let hsh = 2166136261;
+        staticRoot.traverse((o) => {
+          if (!o.isMesh || !o.name || !o.name.startsWith('downtown_block')) return;
+          const uv = o.geometry.attributes.uv;
+          if (!uv) return;
+          let u0 = 1, u1 = 0, v0 = 1, v1 = 0;
+          for (let i = 0; i < uv.count; i++) {
+            const u = uv.getX(i), v = uv.getY(i);
+            u0 = Math.min(u0, u); u1 = Math.max(u1, u);
+            v0 = Math.min(v0, v); v1 = Math.max(v1, v);
+          }
+          for (let i = 0; i < o.name.length; i++) { hsh ^= o.name.charCodeAt(i); hsh = (hsh * 16777619) >>> 0; }
+          const rnd = () => { hsh ^= hsh << 13; hsh ^= hsh >>> 17; hsh ^= hsh << 5; hsh >>>= 0; return (hsh % 1000) / 1000; };
+          // window grid inside the block's uv rect (v flipped: uv v0 = canvas bottom)
+          const x0 = u0 * E, x1 = u1 * E, y0 = (1 - v1) * E, y1 = (1 - v0) * E;
+          const cw = 7, ch = 9, gx = 3, gy = 4;
+          for (let y = y0 + gy; y < y1 - ch; y += ch + gy) {
+            for (let x = x0 + gx; x < x1 - cw; x += cw + gx) {
+              const r = rnd();
+              if (r < 0.62) continue;               // 38% of windows lit
+              cx.fillStyle = r < 0.78 ? '#cfd8e8'   // cool interior
+                           : r < 0.92 ? '#ffd9a0'   // warm interior
+                           : '#ffe9c8';             // bright
+              cx.globalAlpha = 0.55 + rnd() * 0.45;
+              cx.fillRect(Math.round(x), Math.round(y), cw, ch);
+            }
+          }
+          cx.globalAlpha = 1;
+        });
+        const tex = new THREE.CanvasTexture(cv);
+        tex.flipY = true;                           // CanvasTexture default; windows were
+                                                    // written at (1-v) canvas rows, which
+                                                    // pairs with flipY=true sampling
+        tex.colorSpace = THREE.SRGBColorSpace;
+        mats.downtown.emissiveMap = tex;
+        mats.downtown.emissive = new THREE.Color(0xffffff);
+        mats.downtown.emissiveIntensity = window.__rigEmissive !== undefined ? window.__rigEmissive : 0;
+        mats.downtown.needsUpdate = true;   // adding a map slot post-first-render
+                                            // requires a program rebuild — without
+                                            // this the emissiveMap is silently ignored
+      }
       return swapped;
     });
   };
