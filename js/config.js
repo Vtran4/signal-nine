@@ -73,6 +73,26 @@ window.S9 = window.S9 || {};
       rail: 0xd8d8d2, post: 0x9a9a94,
     },
 
+    // WS-B1b per-track light rigs — applied ONLY under ?lit=1 (the certified
+    // compose path keeps the M1 daytime look; cars are live-lit in both paths,
+    // so un-flagged rigs would leak into it). Values tune the existing
+    // hemisphere + directional pair, fog color, and the pano background
+    // intensity (night dims the daytime pano until real night panos exist —
+    // modeler's WS-B2 night-env capture is the proper fix).
+    lightRigs: {
+      coastal: null,            // certified daytime — rig = current scene values
+      downtown: {               // permanent-night kit target: neon-lit dark city
+        hemiSky: 0x2a3448, hemiGround: 0x1a1610, hemiI: 0.32,
+        sunI: 0.35, sunColor: 0x8fa8d8, sunPos: [-160, 220, 90],  // moon
+        fog: 0x11141c, bgIntensity: 0.18,
+      },
+      canyon: {                 // golden-hour red-rock target
+        hemiSky: 0xffd9b0, hemiGround: 0x7a4a2a, hemiI: 0.75,
+        sunI: 2.6, sunColor: 0xffb060, sunPos: [420, 180, -240],  // low warm sun
+        fog: 0xe8c8a0, bgIntensity: 0.8,
+      },
+    },
+
     // --- the golden rule: boost is earned ONLY by danger ---
     boost: {
       triggerAt: 0.99,          // meter must be full to activate

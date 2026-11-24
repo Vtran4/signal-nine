@@ -108,6 +108,21 @@ window.S9 = window.S9 || {};
     const sun = new THREE.DirectionalLight(S9.CFG.palette.sun, 2.2);
     sun.position.set(280, 380, 160);
     scene.add(sun);
+    // WS-B1b: per-track rig under ?lit=1 — retune the existing lights + fog +
+    // pano intensity (never under the certified compose path)
+    const hemi = scene.children.find((o) => o.isHemisphereLight);
+    if (P.lit && S9.CFG.lightRigs && S9.CFG.lightRigs[P.track]) {
+      const rig = S9.CFG.lightRigs[P.track];
+      if (rig) {
+        hemi.color.set(rig.hemiSky); hemi.groundColor.set(rig.hemiGround);
+        hemi.intensity = rig.hemiI;
+        sun.intensity = rig.sunI; sun.color.set(rig.sunColor);
+        if (rig.sunPos) sun.position.set(...rig.sunPos);
+        scene.fog.color.set(rig.fog);
+        // backgroundIntensity applied after the env loads (below)
+        window.__rigBg = rig.bgIntensity;
+      }
+    }
 
     const trackData = await loadTrackData();
     const [tracksGltf, carsGltf, trafficGltf, policeGltf, rivalsGltf, envTex, manifest] = await Promise.all([
@@ -154,6 +169,7 @@ window.S9 = window.S9 || {};
       scene.background = envTex;
       // HDRI pano (kloofendal) is properly exposed — stopgap lift retired
       scene.backgroundIntensity = 1.0;
+      if (window.__rigBg !== undefined) scene.backgroundIntensity = window.__rigBg;  // WS-B1b rig
       if (track.sky) track.sky.visible = false; // pano replaces the gradient dome
     }
 
