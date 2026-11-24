@@ -115,6 +115,13 @@ window.S9 = window.S9 || {};
           o.material.emissive = new THREE.Color(0xff2a1a);
           o.material.emissiveIntensity = 1.4;
         }
+        // forward clusters: warm-white emission on the lights_f slot (contract
+        // v2 — matters at night under the Phase 2.0 lit pipeline; headlamps
+        // and halo rings must read lit on the permanent-night downtown kit)
+        if (o.isMesh && o.material && o.material.name === 'lights_f') {
+          o.material.emissive = new THREE.Color(0xfff2d8);
+          o.material.emissiveIntensity = 0.9;
+        }
         // police lightbar lenses: registered for the alternation pulse
         if (o.isMesh && o.material && /lightbar_(red|blue)/.test(o.name || '')) {
           const m = o.material;
