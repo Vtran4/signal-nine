@@ -145,6 +145,7 @@ def report_group(name, alb, l, solved, target):
 
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else "snapshot"
+    targets = None    # in-memory snapshot (selftest only; never the frozen file)
     manifest = json.load(open(os.path.join(ASSETS, "manifest.json")))
     groups = manifest["atlas_groups"]
     state = atlas_state()
@@ -155,18 +156,30 @@ def main():
         targets = {"coastal_target": medians["coastal"]["median"],
                    "per_group": medians,
                    "atlas_state": state}
-        if mode == "snapshot" or mode == "--selftest":
+        if mode == "snapshot":
+            # guard: the snapshot IS the frozen baseline — never silently
+            # overwrite an existing one (a snapshot run in the PNG-new/JPG-old
+            # window of a rebake round would otherwise hybrid-corrupt it; that
+            # accident happened 2026-11-23 and cost a git restore)
+            if os.path.exists(TARGETS) and "--force" not in sys.argv:
+                raise SystemExit(f"refusing to overwrite existing {TARGETS} — the snapshot is the "
+                                 f"frozen pre-rebake baseline; pass --force only if you intend to "
+                                 f"re-baseline against the current atlases")
             with open(TARGETS, "w") as f:
                 json.dump(targets, f, indent=1)
             print(f"targets written -> {TARGETS} (coastal anchor {medians['coastal']['median']})")
-            if mode == "snapshot":
-                return
+            return
+        # --selftest keeps targets in memory only — NEVER touches the file
 
     if mode in ("solve", "--selftest"):
-        if not os.path.exists(TARGETS):
-            raise SystemExit(f"no snapshot at {TARGETS} — run 'python tools/solve_gain.py snapshot' "
-                             f"against the PRE-rebake atlases first; never recompute targets post-rebake")
-        t = json.load(open(TARGETS))
+        if mode == "--selftest":
+            t = targets          # in-memory from the selftest snapshot above
+        else:
+            if not os.path.exists(TARGETS):
+                raise SystemExit(f"no snapshot at {TARGETS} — run 'python tools/solve_gain.py snapshot' "
+                                 f"against the PRE-rebake atlases first; never recompute targets post-rebake")
+            t = json.load(open(TARGETS))
+        assert t is not None  # selftest path binds it above; solve path loads it here
         changed = state != t.get("atlas_state")
         target = t["coastal_target"]
         print(f"solve_gain solve: coastal anchor {target} from snapshot; "
