@@ -121,6 +121,13 @@ window.S9 = window.S9 || {};
         scene.fog.color.set(rig.fog);
         // backgroundIntensity applied after the env loads (below)
         window.__rigBg = rig.bgIntensity;
+        // B1b2: rig-driven procedural sky swap — the near-white pano dome
+        // dominates luminance at any intensity, so night/golden-hour rigs
+        // drop the pano background + IBL and re-show the gradient dome
+        // (dome sits at the track centroid, rider from the layout round)
+        if (rig.useProceduralSky) {
+          window.__rigSky = { top: rig.skyTop, low: rig.skyLow, envI: rig.envI };
+        }
       }
     }
 
@@ -171,6 +178,17 @@ window.S9 = window.S9 || {};
       scene.backgroundIntensity = 1.0;
       if (window.__rigBg !== undefined) scene.backgroundIntensity = window.__rigBg;  // WS-B1b rig
       if (track.sky) track.sky.visible = false; // pano replaces the gradient dome
+      // B1b2: night/golden-hour rigs re-show the procedural gradient dome with
+      // rig colors and drop the pano background + daytime IBL (the dome rides
+      // at the track centroid; fog color already carries the rig mood)
+      if (window.__rigSky && track.sky) {
+        scene.background = null;
+        const uni = track.sky.material.uniforms;
+        uni.top.value.set(window.__rigSky.top);
+        uni.low.value.set(window.__rigSky.low);
+        track.sky.visible = true;
+        scene.environmentIntensity = window.__rigSky.envI;   // night: ~no daylight bounce
+      }
     }
 
     const carCfg = S9.CARS.find(c => c.id === P.car) || S9.CARS[0];
