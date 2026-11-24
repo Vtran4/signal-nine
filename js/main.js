@@ -128,6 +128,7 @@ window.S9 = window.S9 || {};
         if (rig.useProceduralSky) {
           window.__rigSky = { top: rig.skyTop, low: rig.skyLow, envI: rig.envI };
         }
+        if (rig.emissiveI !== undefined) window.__rigEmissive = rig.emissiveI;  // WS-B1c
       }
     }
 
