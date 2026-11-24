@@ -84,8 +84,9 @@ window.S9 = window.S9 || {};
   };
 
   class SpeedFX {
-    constructor(renderer, scene, camera, enabled) {
+    constructor(renderer, scene, camera, enabled, lit) {
       this.enabled = !!enabled;
+      this.lit = !!lit;
       this.renderer = renderer;
       this.scene = scene;
       this.camera = camera;
@@ -99,6 +100,18 @@ window.S9 = window.S9 || {};
       this.composer.addPass(new THREE.RenderPass(scene, camera));
       this.pass = new THREE.ShaderPass(SenseSpeedShader);
       this.composer.addPass(this.pass);
+      // WS-B1e: bright-pass bloom under the lit pipeline only — emissive
+      // windows/taillights/neon need the glow to sell night; the certified
+      // compose look ships without it. UnrealBloomPass is in the bundle
+      // (no rebuild); threshold sits high so only HDR-bright content blooms.
+      if (this.lit && THREE.UnrealBloomPass) {
+        this.bloom = new THREE.UnrealBloomPass(
+          new THREE.Vector2(innerWidth || 1280, innerHeight || 720),
+          0.4,   // strength
+          0.5,   // radius
+          0.85); // threshold — HDR-bright only (emissives, sky highlights)
+        this.composer.addPass(this.bloom);
+      }
       if (THREE.OutputPass) this.composer.addPass(new THREE.OutputPass());
       this.resize(innerWidth || 1280, innerHeight || 720);
     }

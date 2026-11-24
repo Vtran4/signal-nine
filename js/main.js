@@ -257,7 +257,7 @@ window.S9 = window.S9 || {};
     car.track.trafficRef = traffic; // bot lane checks
 
     const physics = new S9.Physics(scene);
-    const speedfx = new S9.SpeedFX(renderer, scene, camera, P.fx);
+    const speedfx = new S9.SpeedFX(renderer, scene, camera, P.fx, P.lit);
     const audio = new S9.AudioSet();
     const game = new S9.Game({ scene, camera, renderer, track, car, traffic, physics, speedfx, audio, assets: { carsGltf, trafficGltf, rivalsGltf } });
     traffic.debrisRef = game.debris;   // traffic shatters feed the shared debris engine
