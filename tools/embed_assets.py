@@ -92,7 +92,8 @@ def main():
     # (file:// has no fetch — the gt3 livery JSON is consumer-critical, and a
     # relative fetch on file:// is the crossOrigin failure class that cost us
     # the white-texture round; pm-s9 ruling: consumer + embed land together)
-    for extra in ("tracks_data.json", "env_coast.jpg", "gt3_liveries.json"):
+    for extra in ("tracks_data.json", "env_coast.jpg", "gt3_liveries.json",
+                  "alb_gt3.png", "ao_gt3.png"):
         if os.path.exists(os.path.join(ASSETS, extra)):
             names.append(extra)
 

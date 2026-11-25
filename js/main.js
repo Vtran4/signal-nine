@@ -276,6 +276,29 @@ window.S9 = window.S9 || {};
       scene.remove(old);
       scene.add(car.mesh);
       car.isGlb = true;
+      // WS-Q hi-res wiring: the 2048^2 gt3 albedo + AO ride the bundle; paint regions
+      // bake NEUTRAL WHITE so the per-variant color multiplies on top (modeler's
+      // albedo contract). aoMap rides the shared UV set (channel 0).
+      const gt3Maps = window.__S9_ASSETS || {};
+      if (gt3Maps['alb_gt3.png'] && gt3Maps['ao_gt3.png']) {
+        const mkTex = (key, srgb) => {
+          const t = new THREE.TextureLoader().load(gt3Maps[key]);
+          t.flipY = false;              // glTF UV convention (the atlas rule)
+          if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+          return t;
+        };
+        const alb = mkTex('alb_gt3.png', true);
+        const ao = mkTex('ao_gt3.png', false);
+        ao.channel = 0;
+        car.mesh.traverse((o) => {
+          if (o.isMesh && o.material && (o.material.name === 'paint_gt3' ||
+              /carbon|tire|rim|glass_gt3/.test(o.material.name || ''))) {
+            if (!o.material.map) o.material.map = alb;          // true-color accents + white paint regions
+            if (!o.material.aoMap) { o.material.aoMap = ao; o.material.aoMapIntensity = 0.9; }
+            o.material.needsUpdate = true;   // map slot added pre-first-render? assign before add — needsUpdate safe
+          }
+        });
+      }
       // WS-A livery consumer: swap paint_gt3 parameters off the visual-only
       // livery JSON (schema 1: paint base/flake per variant; defaults carry
       // metallic/roughness/clearcoat). Variant = ?livery=<id> or default v1.
