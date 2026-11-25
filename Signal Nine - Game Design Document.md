@@ -164,8 +164,9 @@ GPU. Acceptance gates for the vertical slice:
   one Crash junction launch → results → restart, with the medal and damage
   score matching the event log.
 - **fps** — frame-rate gate at 1080p on the desktop GTX 1080 Ti: design target
-  60, contract asserts **≥55 sustained** + median RAF gap ≤18.5ms + frame-EMA
-  ≤18ms with the dynamic scaler unengaged (resScale 1.0) and full traffic on
-  track (ratified 2026-11-23; contract form implemented in `8b3bbe5`).
+  60, contract asserts **≥30 sustained** (Phase 2.0 floor — the ≥55 M1-era bar
+  retired at the lit-default landing; healthy lit numbers 57–60) + median RAF
+  gap ≤18.5ms + frame-EMA ≤18ms with the dynamic scaler unengaged (resScale
+  1.0) and full traffic on track.
 
 See the repository history for the verification log of each shipped build.

@@ -70,8 +70,9 @@ window.S9 = window.S9 || {};
       state: q.get('state') || '',              // state jump: race | crash3 | results | boost | drive
       fx: q.get('fx') !== '0',                  // ?fx=0 disables the sense-of-speed pass
       lockres: bool('lockres'),                 // pin the dynamic-resolution scaler
-      lit: bool('lit'),                         // ?lit=1 — Phase 2.0 WS-B1 lit statics:
-                                                // compose material -> PBR + light-atlas AO
+      lit: q.get('lit') !== '0',                // Phase 2.0 WS-B1 lit pipeline is the DEFAULT
+                                                // (landed); ?lit=0 preserves the certified M1
+                                                // compose path for A/B evidence
       car: inSet('car', ['street', 'perf', 'super', 'gt3', 'police'], 'street'),
     },
 
