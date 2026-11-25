@@ -129,11 +129,18 @@ window.S9 = window.S9 || {};
     if (P.lit && S9.CFG.lightRigs && S9.CFG.lightRigs[P.track]) {
       const rig = S9.CFG.lightRigs[P.track];
       if (rig) {
-        hemi.color.set(rig.hemiSky); hemi.groundColor.set(rig.hemiGround);
-        hemi.intensity = rig.hemiI;
-        sun.intensity = rig.sunI; sun.color.set(rig.sunColor);
+        // every field guarded — partial rigs (e.g. coastal fog-trim-only) must
+        // leave the certified values for anything they don't set. An unguarded
+        // set(undefined) makes the light NaN and NaNs the whole lit frame.
+        if (rig.hemiSky !== undefined) hemi.color.set(rig.hemiSky);
+        if (rig.hemiGround !== undefined) hemi.groundColor.set(rig.hemiGround);
+        if (rig.hemiI !== undefined) hemi.intensity = rig.hemiI;
+        if (rig.sunI !== undefined) sun.intensity = rig.sunI;
+        if (rig.sunColor !== undefined) sun.color.set(rig.sunColor);
         if (rig.sunPos) sun.position.set(...rig.sunPos);
-        scene.fog.color.set(rig.fog);
+        if (rig.fog !== undefined) scene.fog.color.set(rig.fog);
+        if (rig.fogNear !== undefined) scene.fog.near = rig.fogNear;
+        if (rig.fogFar !== undefined) scene.fog.far = rig.fogFar;
         // backgroundIntensity applied after the env loads (below)
         window.__rigBg = rig.bgIntensity;
         // B1b2: rig-driven procedural sky swap — the near-white pano dome
@@ -189,7 +196,7 @@ window.S9 = window.S9 || {};
                 roadMat.onBeforeCompile = (shader) => {
                   shader.uniforms.tMirror = { value: mirror.rt.texture };
                   shader.uniforms.uMirrorMat = { value: mirror.textureMatrix };
-                  shader.uniforms.uWet = { value: 0.42 };  // wet-street reflection strength
+                  shader.uniforms.uWet = { value: 0.55 };  // B1f: 0.42 read weak in chase framing
                   shader.vertexShader = shader.vertexShader
                     .replace('#include <common>',
                       '#include <common>\nvarying vec4 vMirrorUv;\nuniform mat4 uMirrorMat;')
@@ -199,7 +206,10 @@ window.S9 = window.S9 || {};
                     .replace('#include <common>',
                       '#include <common>\nvarying vec4 vMirrorUv;\nuniform sampler2D tMirror;\nuniform float uWet;')
                     .replace('#include <fog_fragment>',
-                      'vec3 mrefl = texture2DProj(tMirror, vMirrorUv).rgb;\n' +
+                      // B1f: 2-tap vertical smear — wet asphalt, not a perfect mirror
+                      'vec4 mreflUv2 = vMirrorUv + vec4(0.0, 0.012, 0.0, 0.0);\n' +
+                      'vec3 mrefl = texture2DProj(tMirror, vMirrorUv).rgb * 0.6 +\n' +
+                      '            texture2DProj(tMirror, mreflUv2).rgb * 0.4;\n' +
                       'gl_FragColor.rgb = mix(gl_FragColor.rgb, mrefl, uWet);\n' +
                       '#include <fog_fragment>');
                 };

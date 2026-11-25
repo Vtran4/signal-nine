@@ -112,7 +112,8 @@ window.S9 = window.S9 || {};
           new THREE.Vector2(innerWidth || 1280, innerHeight || 720),
           0.4,   // strength
           0.5,   // radius
-          0.85); // threshold — HDR-bright only (emissives, sky highlights)
+          0.7);  // threshold — B1f: 0.85 left rest-state taillights unbloomed;
+                 // 0.7 catches them while the night sky (dark) stays clean
         this.composer.addPass(this.bloom);
       }
       if (THREE.OutputPass) this.composer.addPass(new THREE.OutputPass());

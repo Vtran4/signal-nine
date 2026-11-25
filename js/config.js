@@ -90,7 +90,10 @@ window.S9 = window.S9 || {};
     // intensity (night dims the daytime pano until real night panos exist —
     // modeler's WS-B2 night-env capture is the proper fix).
     lightRigs: {
-      coastal: null,            // certified daytime — rig = current scene values
+      coastal: {                // B1f: fog trim only (the over-haze flag) —
+                                // colors/intensities stay certified
+        fogNear: 480, fogFar: 2200,
+      },
       downtown: {               // permanent-night kit target: neon-lit dark city
         hemiSky: 0x2a3448, hemiGround: 0x1a1610, hemiI: 0.32,
         sunI: 0.35, sunColor: 0x8fa8d8, sunPos: [-160, 220, 90],  // moon
