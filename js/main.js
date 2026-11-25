@@ -57,8 +57,12 @@ window.S9 = window.S9 || {};
   }
 
   async function loadEnv() {
+    // Victor's golden-hour pick (routed via pm-s9): ?env=goldenhour swaps the pano/
+    // IBL to the graded candidate; default stays the certified daytime pano.
+    const envParam = new URLSearchParams(location.search).get('env');
+    const envName = envParam === 'goldenhour' ? 'env_coast_goldenhour.jpg' : 'env_coast.jpg';
     const A = window.__S9_ASSETS;
-    const src = (A && A['env_coast.jpg']) ? A['env_coast.jpg'] : 'assets/env_coast.jpg';
+    const src = (A && A[envName]) ? A[envName] : 'assets/' + envName;
     try {
       const tex = await new THREE.TextureLoader().loadAsync(src);
       tex.mapping = THREE.EquirectangularReflectionMapping;
