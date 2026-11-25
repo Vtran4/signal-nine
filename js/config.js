@@ -108,6 +108,9 @@ window.S9 = window.S9 || {};
         neonI: 2.0,             // WS-B2 neon signs: read hotter than window interiors
         bloomThreshold: 0.28,   // B1f measured: taillight lum ~0.317 (ff2a1a x1.4, REC-709)
                                 // — must sit ABOVE the threshold; sky (bg 0.18 x navy) is far below
+        bloomStrength: 0.28,    // B2 fusion tune: 0.4 fused the dense window/banner banks
+                                // into white masses; 0.28 keeps every emitter blooming,
+                                // softer halos (threshold unmoved — taillights still halo)
         // B1b2: swap the near-white pano dome for the procedural gradient sky
         // (the pano dominates luminance at any intensity — verified); IBL from
         // the daytime pano drops to near-zero (night has no daylight bounce)

@@ -357,6 +357,8 @@ window.S9 = window.S9 || {};
     const rigNow = S9.CFG.lightRigs && S9.CFG.lightRigs[P.track];
     if (P.lit && speedfx.bloom && rigNow && rigNow.bloomThreshold !== undefined)
       speedfx.bloom.threshold = rigNow.bloomThreshold;
+    if (P.lit && speedfx.bloom && rigNow && rigNow.bloomStrength !== undefined)
+      speedfx.bloom.strength = rigNow.bloomStrength;
     const audio = new S9.AudioSet();
     const game = new S9.Game({ scene, camera, renderer, track, car, traffic, physics, speedfx, audio, assets: { carsGltf, trafficGltf, rivalsGltf } });
     traffic.debrisRef = game.debris;   // traffic shatters feed the shared debris engine
