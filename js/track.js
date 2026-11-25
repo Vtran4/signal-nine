@@ -133,15 +133,19 @@ window.S9 = window.S9 || {};
           const rnd = () => { hsh ^= hsh << 13; hsh ^= hsh >>> 17; hsh ^= hsh << 5; hsh >>>= 0; return (hsh % 1000) / 1000; };
           // window grid inside the block's uv rect (v flipped: uv v0 = canvas bottom)
           const x0 = u0 * E, x1 = u1 * E, y0 = (1 - v1) * E, y1 = (1 - v0) * E;
-          const cw = 7, ch = 9, gx = 3, gy = 4;
+          // density retune (02:40 wake): at 7x9 cells a 3%-of-atlas facade rect fits
+          // only ~2x2 windows — the canvas measured brightFrac 0.0014 ('empty') and
+          // facades showed 1-2 dots. Denser grid + stronger alpha so each facade
+          // carries a full lit-window grid (the B1c look target: warm clusters).
+          const cw = 4, ch = 5, gx = 3, gy = 3;
           for (let y = y0 + gy; y < y1 - ch; y += ch + gy) {
             for (let x = x0 + gx; x < x1 - cw; x += cw + gx) {
               const r = rnd();
-              if (r < 0.62) continue;               // 38% of windows lit
-              cx.fillStyle = r < 0.78 ? '#cfd8e8'   // cool interior
-                           : r < 0.92 ? '#ffd9a0'   // warm interior
+              if (r < 0.45) continue;               // 55% of windows lit
+              cx.fillStyle = r < 0.65 ? '#cfd8e8'   // cool interior
+                           : r < 0.85 ? '#ffd9a0'   // warm interior
                            : '#ffe9c8';             // bright
-              cx.globalAlpha = 0.55 + rnd() * 0.45;
+              cx.globalAlpha = 0.6 + rnd() * 0.25;
               cx.fillRect(Math.round(x), Math.round(y), cw, ch);
             }
           }
