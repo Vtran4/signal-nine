@@ -519,6 +519,8 @@ def bake_group(g, objs, res, samples, margin):
 # ---------------- env panorama (--full) ----------------
 def render_pano():
     suffix = ""
+    if PANO_TIME == "goldenhour" or ENV_NAME:
+        suffix = "_goldenhour" if PANO_TIME == "goldenhour" else "_" + (ENV_NAME or "variant").replace("_puresky", "").replace("_4k", "")
     old = bpy.data.objects.get("pano")
     if old:
         bpy.data.objects.remove(old, do_unlink=True)
@@ -620,7 +622,11 @@ if MODE == "--export-only":
     print("BLEND_SAVED (atlas UVs persisted)")
 elif MODE == "--pano-only":
     # pano render ONLY — no bake_group passes, no UV re-assignment, no glb
-    # re-export (the golden-hour env variant is the deliverable)
+    # re-export (the env variant is the deliverable). The output file honors
+    # BOTH variant axes: --env= swaps the sky source, --pano-time= names the
+    # variant — an HDRI swap without --pano-time STILL writes a suffixed
+    # variant (f5b55a8's certified daytime env_coast.jpg must never be
+    # overwritten by a variant render — the 22:5x overwrite catch).
     render_pano()
     manifest["mode_note"] = "--pano-only: env variant only, atlases untouched"
     print("BAKE_DONE mode=--pano-only")
