@@ -317,6 +317,8 @@ window.S9 = window.S9 || {};
           }
         });
         window.__livery = v.id;
+        window.__liveryName = v.name;    // WS-Q stat flavor: results/menu surface
+        window.__liveryUi = v.ui;        // the variant's display name + UI color
       }
     } else if (carsGltf && carCfg.id !== 'police') {
       const old = car.mesh;

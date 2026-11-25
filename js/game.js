@@ -281,8 +281,11 @@ window.S9 = window.S9 || {};
       const s = this.car.stats;
       document.getElementById('res-title').textContent = medal === '4TH' ? 'RACE COMPLETE' : medal + ' MEDAL';
       document.getElementById('res-score').textContent = ord;
+      // WS-Q stat flavor: the chosen livery surfaces in the results line (name from
+      // the bundle-embedded schema-v1 JSON via the ?livery= consumer).
+      const liveryBit = window.__liveryName ? ` · ${window.__liveryName}` : '';
       document.getElementById('res-detail').textContent =
-        `${s.burnouts} burnout${s.burnouts === 1 ? '' : 's'} · ${s.nearMisses} near-miss${s.nearMisses === 1 ? '' : 'es'} · ${Math.round(s.oncomingTime)}s oncoming · ${s.crashes} crash${s.crashes === 1 ? '' : 'es'}`;
+        `${s.burnouts} burnout${s.burnouts === 1 ? '' : 's'} · ${s.nearMisses} near-miss${s.nearMisses === 1 ? '' : 'es'} · ${Math.round(s.oncomingTime)}s oncoming · ${s.crashes} crash${s.crashes === 1 ? '' : 'es'}${liveryBit}`;
       const rank = clamp(pos, 1, 4);
       try {
         const raw = localStorage.getItem('s9_medals');
@@ -298,8 +301,11 @@ window.S9 = window.S9 || {};
       this.mode = 'results';
       const s = this.car.stats;
       document.getElementById('res-score').textContent = fmtMph(this.car.stats.topMph) + ' MPH';
+      // WS-Q stat flavor: the chosen livery surfaces in the results line (name from
+      // the bundle-embedded schema-v1 JSON via the ?livery= consumer).
+      const liveryBit = window.__liveryName ? ` · ${window.__liveryName}` : '';
       document.getElementById('res-detail').textContent =
-        `${s.burnouts} burnout${s.burnouts === 1 ? '' : 's'} · ${s.nearMisses} near-miss${s.nearMisses === 1 ? '' : 'es'} · ${Math.round(s.oncomingTime)}s oncoming · ${s.crashes} crash${s.crashes === 1 ? '' : 'es'}`;
+        `${s.burnouts} burnout${s.burnouts === 1 ? '' : 's'} · ${s.nearMisses} near-miss${s.nearMisses === 1 ? '' : 'es'} · ${Math.round(s.oncomingTime)}s oncoming · ${s.crashes} crash${s.crashes === 1 ? '' : 'es'}${liveryBit}`;
       // best-of-day persistence
       const today = new Date().toDateString();
       if (!this.best || this.best.day !== today || s.topMph > this.best.topMph) {
