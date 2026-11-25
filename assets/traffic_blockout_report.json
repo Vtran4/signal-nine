@@ -14,7 +14,7 @@
   "vehicles": [
     {
       "type": "civ_sedan",
-      "tri_count": 320,
+      "tri_count": 2080,
       "dims": {
         "length": 4.8,
         "width": 1.85,
@@ -47,7 +47,7 @@
     },
     {
       "type": "civ_hatch",
-      "tri_count": 320,
+      "tri_count": 2080,
       "dims": {
         "length": 4.1,
         "width": 1.75,
@@ -80,7 +80,7 @@
     },
     {
       "type": "civ_pickup",
-      "tri_count": 356,
+      "tri_count": 2116,
       "dims": {
         "length": 5.4,
         "width": 1.95,
@@ -116,7 +116,7 @@
     },
     {
       "type": "civ_boxvan",
-      "tri_count": 372,
+      "tri_count": 2140,
       "dims": {
         "length": 5.8,
         "width": 2.05,
@@ -154,7 +154,7 @@
     },
     {
       "type": "civ_bus",
-      "tri_count": 300,
+      "tri_count": 2080,
       "dims": {
         "length": 11.0,
         "width": 2.5,
@@ -187,7 +187,7 @@
     },
     {
       "type": "civ_semi",
-      "tri_count": 508,
+      "tri_count": 2392,
       "dims": {
         "length": 16.0,
         "width": 2.45,
@@ -207,6 +207,8 @@
         "semi_bumper_r",
         "semi_exhaust",
         "semi_glass",
+        "semi_landinggear_l",
+        "semi_landinggear_r",
         "semi_lights_f",
         "semi_lights_r",
         "semi_mirror_l",
@@ -226,6 +228,7 @@
         "semi_stack_l",
         "semi_stack_r",
         "semi_trailer",
+        "semi_underride_r",
         "semi_wheel_fl",
         "semi_wheel_fr",
         "semi_wheel_rl"

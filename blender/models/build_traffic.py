@@ -91,6 +91,175 @@ def circle_pts(r, seg=18):
     return [(r * math.sin(2 * math.pi * i / seg), r * math.cos(2 * math.pi * i / seg))
             for i in range(seg)]
 
+# ---------------- WS-Q LOD0: loft machinery (GT3 hull pattern) ----------------
+def densify(pts, k):
+    """Shape-preserving: insert k linear interpolants per span."""
+    out = []
+    for a, b in zip(pts, pts[1:]):
+        out.append(a)
+        for j in range(1, k + 1):
+            t = j / (k + 1)
+            out.append((a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t))
+    out.append(pts[-1])
+    return out
+
+
+def _interp(pts, f):
+    """Piecewise-linear value at f over an f-monotone (f, u) list."""
+    if f <= pts[0][0]:
+        return pts[0][1]
+    for a, b in zip(pts, pts[1:]):
+        if a[0] <= f <= b[0]:
+            t = (f - a[0]) / max(1e-9, b[0] - a[0])
+            return a[1] + (b[1] - a[1]) * t
+    return pts[-1][1]
+
+
+def split_profile(profile):
+    """Closed silhouette loop -> (upper edge, lower edge), both f-monotone.
+    Loop walks nose-floor -> nose-top -> ... -> tail-top -> tail-floor -> ...
+    -> floor back to nose; the upper edge = everything up to the max-f point."""
+    fmax_i = max(range(len(profile)), key=lambda i: profile[i][0])
+    upper = profile[:fmax_i + 1]
+    lower = [profile[fmax_i]] + profile[fmax_i + 1:]
+    if tuple(lower[-1]) != tuple(profile[0]):
+        lower.append(profile[0])
+    if upper[0][0] > upper[-1][0]:
+        upper = list(reversed(upper))
+    if lower[0][0] > lower[-1][0]:
+        lower = list(reversed(lower))
+    def dd(ps):
+        # drop only EXACT duplicate points - same-f different-u pairs are
+        # legitimate vertical faces (nose/tail); dropping them collapsed
+        # the end rings into degenerate wedges
+        out = [ps[0]]
+        for q in ps[1:]:
+            if q != out[-1]:
+                out.append(q)
+        return out
+    return dd(upper), dd(lower)
+
+
+CIV_RING = [(-1.00, 0.00), (-1.00, 0.38), (-0.975, 0.72), (-0.90, 0.93),
+            (-0.55, 1.00), (0.00, 1.02), (0.55, 1.00), (0.90, 0.93),
+            (0.975, 0.72), (1.00, 0.38), (1.00, 0.00), (0.50, -0.03),
+            (-0.50, -0.03)]
+CIV_RING_D = densify(CIV_RING, 1)  # 13 -> 25 pts
+
+
+def gauss(x, s):
+    return math.exp(-0.5 * (x / s) ** 2)
+
+
+def civ_ring(f, spec, upper, lower):
+    """Cross-section ring at forward station f (GT3 hull_ring pattern)."""
+    cz = spec["wheel_r"]
+    r_arch = spec["wheel_r"] + 0.09
+    fl = _interp(lower, f)
+    for ax in spec["axles"]:
+        df = f - ax
+        if abs(df) < r_arch:
+            fl = max(fl, cz + math.sqrt(r_arch ** 2 - df ** 2))
+    belt = _interp(upper, f)
+    fl = min(fl, belt - 0.04)
+    W = spec["width"]
+    nose, tail = upper[0][0], upper[-1][0]
+    taper = 1.0 - 0.16 * max(gauss(f - nose, 0.55), gauss(f - tail, 0.55))
+    tuck = 0.10 * max(gauss(f - spec["axles"][0], 0.22),
+                      gauss(f - spec["axles"][-1], 0.22))
+    w_eff = W / 2 * taper * (1.0 - tuck)
+    return [(lf * w_eff, f, fl + uf * (belt - fl)) for lf, uf in CIV_RING_D]
+
+
+def loft_smooth(ob):
+    for poly in ob.data.polygons:
+        poly.use_smooth = True
+    return ob
+
+
+def loft_body(tok, spec):
+    """LOD0 body: rings along the length from the silhouette edges."""
+    upper, lower = split_profile(spec["profile"])
+    f0, f1 = upper[0][0], upper[-1][0]
+    n_st = 30
+    eps = 0.008 * (f1 - f0)  # skip the degenerate exact-end rings
+    rings = [civ_ring(f0 + eps + (f1 - f0 - 2 * eps) * i / (n_st - 1),
+                      spec, upper, lower)
+             for i in range(n_st)]
+    n = len(rings[0])
+    verts = [v for ring in rings for v in ring]
+    faces = []
+    for i in range(len(rings) - 1):
+        for j in range(n):
+            j2 = (j + 1) % n
+            faces.append((i * n + j, i * n + j2, (i + 1) * n + j2, (i + 1) * n + j))
+    faces.append(tuple(range(n - 1, -1, -1)))
+    base = (len(rings) - 1) * n
+    faces.append(tuple(range(base, base + n)))
+    return loft_smooth(mesh_from(tok + "_body", verts, faces,
+                                 MAT["paint_traffic"]))
+
+
+CANOPY_RING = [(-1, 0.0), (-0.94, 0.55), (-0.70, 0.93), (0.0, 1.0),
+               (0.70, 0.93), (0.94, 0.55), (1, 0.0)]
+
+
+def loft_canopy(tok, spec):
+    """Canopy glass loft: band from the body's belt line up to the canopy
+    roofline, narrower than the body (canopy_w)."""
+    upper, _ = split_profile(spec["profile"])
+    up = spec["canopy"]
+    f0, f1 = up[0][0], up[-1][0]
+    n_st = 12
+    gw = spec["width"] * spec["canopy_w"] / 2.0
+    rings = []
+    for i in range(n_st):
+        f = f0 + (f1 - f0) * i / (n_st - 1)
+        b = _interp(upper, f)            # belt (body top edge) at f
+        t = _interp(up, f)               # canopy roofline at f
+        rings.append([(lf * gw, f, b + uf * max(0.05, t - b))
+                      for lf, uf in CANOPY_RING])
+    n = len(rings[0])
+    verts = [v for ring in rings for v in ring]
+    faces = []
+    for i in range(len(rings) - 1):
+        for j in range(n):
+            j2 = (j + 1) % n
+            faces.append((i * n + j, i * n + j2, (i + 1) * n + j2, (i + 1) * n + j))
+    faces.append(tuple(range(n - 1, -1, -1)))
+    base = (len(rings) - 1) * n
+    faces.append(tuple(range(base, base + n)))
+    return loft_smooth(mesh_from(tok + "_glass", verts, faces, MAT["glass"]))
+
+
+def make_wheel(name, spec, x, axle):
+    """24-seg cylinder tire with annulus caps (GT3 tire pattern)."""
+    R = spec["wheel_r"]
+    tw = spec["tire_w"]
+    SU = 24
+    half = tw / 2
+    rin = R * 0.62
+    verts, faces = [], []
+    for xs in (-half, half):
+        for i in range(SU):
+            a = 2 * math.pi * i / SU
+            verts.append((xs, R * math.sin(a), R * math.cos(a)))
+    for i in range(SU):
+        i2 = (i + 1) % SU
+        faces.append((i, i2, SU + i2, SU + i))
+    for si, xs in ((0, -half), (1, half)):
+        base = len(verts)
+        for i in range(SU):
+            a = 2 * math.pi * i / SU
+            verts.append((xs, R * math.sin(a), R * math.cos(a)))
+        for i in range(SU):
+            a = 2 * math.pi * i / SU
+            verts.append((xs, rin * math.sin(a), rin * math.cos(a)))
+        for i in range(SU):
+            i2 = (i + 1) % SU
+            faces.append((base + i, base + i2, base + SU + i2, base + SU + i))
+    return mesh_from(name, verts, faces, MAT["tire"], location=(x, axle, R))
+
 # ---------------- specs (blockout massing, meters; forward<0 = nose) ----------------
 CIVS = {
     "sedan": {
@@ -154,18 +323,18 @@ CIVS["semi"]["profile"] = CIVS["semi"]["cab"] + CIVS["semi"]["trailer"]  # combi
 def build_civ(tok, spec):
     parts = []
     if "cab" in spec:
-        body = extruded_profile(tok + "_body", spec["cab"],
-                                spec["width"], MAT["paint_traffic"])
+        # semi: cab+trailer combined profile is not a closed loop - loft
+        # the cab, keep the box trailer as a prism
+        cab_spec = dict(spec)
+        cab_spec["profile"] = spec["cab"]
+        body = loft_body(tok + "_cab", cab_spec)
+        body.name = tok + "_body"  # contract: civ-type_body
         trl = extruded_profile(tok + "_trailer", spec["trailer"],
                                spec["width"] * 0.98, MAT["paint_traffic"])
-        parts.extend([body, trl])
+        parts.append(trl)
     else:
-        body = extruded_profile(tok + "_body", spec["profile"],
-                                spec["width"], MAT["paint_traffic"])
-        parts.append(body)
-    canopy = extruded_profile(tok + "_glass", spec["canopy"],
-                              spec["width"] * spec["canopy_w"], MAT["glass"])
-    parts.append(canopy)
+        body = loft_body(tok, spec)
+    parts.append(loft_canopy(tok, spec))
     keys = ("fl", "fr", "rl", "rr")
     axles = [spec["axles"][0], spec["axles"][-1]]
     if spec["extra_axle"]:
@@ -173,9 +342,7 @@ def build_civ(tok, spec):
         keys = ("fl", "fr", "rl", "rr", "rl2", "rr2")
     for key, axle in zip(keys, axles):
         x = -spec["track_half"] if key.startswith(("fl", "rl")) else spec["track_half"]
-        wheel = extruded_profile(tok + "_wheel_" + key, circle_pts(spec["wheel_r"]),
-                                 spec["tire_w"], MAT["tire"], location=(x, axle, spec["wheel_r"]))
-        parts.append(wheel)
+        parts.append(make_wheel(tok + "_wheel_" + key, spec, x, axle))
     nose = spec["profile"][0][0]
     tail = max(p[0] for p in spec["profile"])
     parts.append(box_at(tok + "_bumper_f",
@@ -247,6 +414,13 @@ def build_civ(tok, spec):
         parts.append(box_at(tok + "_grille", (2.0, 0.06, 0.5),
                             (0.0, 5.44, 1.6), MAT["tire"]))
     if tok == "semi":
+        # trailer running gear: landing gear struts + rear underride bar
+        parts.append(box_at(tok + "_landinggear_l", (0.10, 0.30, 0.85),
+                            (-0.55, 0.20, 0.60), MAT["metal"]))
+        parts.append(box_at(tok + "_landinggear_r", (0.10, 0.30, 0.85),
+                            (0.55, 0.20, 0.60), MAT["metal"]))
+        parts.append(box_at(tok + "_underride_r", (spec["width"] * 0.9, 0.08, 0.12),
+                            (0.0, tail - 0.25, 0.55), MAT["metal"]))
         for sx in (-1, 1):
             parts.append(box_at(tok + "_stack_" + ("l" if sx < 0 else "r"),
                                 (0.14, 0.14, 2.5), (sx * 0.82, -2.75, 2.1), MAT["metal"]))
