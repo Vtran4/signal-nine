@@ -95,6 +95,7 @@ window.S9 = window.S9 || {};
         sunI: 0.35, sunColor: 0x8fa8d8, sunPos: [-160, 220, 90],  // moon
         fog: 0x11141c, bgIntensity: 0.18,
         emissiveI: 1.0,         // WS-B1c: procedural lit windows on at night
+        neonI: 2.0,             // WS-B2 neon signs: read hotter than window interiors
         // B1b2: swap the near-white pano dome for the procedural gradient sky
         // (the pano dominates luminance at any intensity — verified); IBL from
         // the daytime pano drops to near-zero (night has no daylight bounce)
@@ -105,6 +106,7 @@ window.S9 = window.S9 || {};
         sunI: 2.6, sunColor: 0xffb060, sunPos: [420, 180, -240],  // low warm sun
         fog: 0xe8c8a0, bgIntensity: 0.8,
         emissiveI: 0.15,        // a few lit windows at dusk
+        neonI: 0.4,             // dusk neon: dimmed
         useProceduralSky: true, skyTop: 0x88a8d8, skyLow: 0xffb870, envI: 0.5,
       },
     },

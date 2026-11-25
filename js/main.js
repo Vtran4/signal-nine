@@ -144,6 +144,7 @@ window.S9 = window.S9 || {};
           window.__rigSky = { top: rig.skyTop, low: rig.skyLow, envI: rig.envI };
         }
         if (rig.emissiveI !== undefined) window.__rigEmissive = rig.emissiveI;  // WS-B1c
+        if (rig.neonI !== undefined) window.__rigNeon = rig.neonI;  // WS-B2 neon signs
       }
     }
 
