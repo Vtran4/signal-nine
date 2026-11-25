@@ -65,10 +65,12 @@ window.S9 = window.S9 || {};
     const nodeToGroup = {};
     for (const g in groups) for (const n of groups[g].nodes || []) nodeToGroup[n] = g;
     const GAIN = { coastal: 2.4, props: 1.78, canyon: 1.39, downtown: 1.01 };  // re-solved post-rebake by tools/solve_gain.py (relative anchor, gain_targets.json snapshot)
+    const lightTex = {};                    // per-group light atlas (WS-B2 neon emissive source)
     return Promise.all(Object.keys(groups).map((g) =>
       Promise.all([loadTex(groups[g].albedo, true), loadTex(groups[g].light, false)])
         .then(([a, l]) => {
           let m;
+          lightTex[g] = l;
           if (lit) {
             l.channel = 0;                     // single-UV glb: AO rides uv0 with the albedo
             m = new THREE.MeshStandardMaterial({
@@ -88,7 +90,21 @@ window.S9 = window.S9 || {};
       let swapped = 0;
       staticRoot.traverse((o) => {
         if (o.isMesh && o.name && nodeToGroup[o.name]) {
-          o.material = mats[nodeToGroup[o.name]];
+          const g = nodeToGroup[o.name];
+          // WS-B2 NEON_BYPASS contract (amended 2026-11-24, pm-s9 accepted):
+          // the neon signs are OUT of the baked-atlas pipeline — their glyph
+          // emission rides the glb as emissiveTexture +
+          // KHR_materials_emissive_strength, which GLTFLoader wires into the
+          // material automatically. So neon_* nodes KEEP their glb material
+          // (never overwritten by the group material); the rig drives ONLY
+          // material.emissiveIntensity via __rigNeon (main.js). Day: intensity
+          // authored low / rig 0 — the glyph art shows through the albedo.
+          const origName = (o.material && o.material.name) || '';
+          if (lit && origName.startsWith('neon_')) {
+            o.material.emissiveIntensity = window.__rigNeon !== undefined ? window.__rigNeon : o.material.emissiveIntensity;
+          } else {
+            o.material = mats[g];
+          }
           swapped++;
         }
       });
