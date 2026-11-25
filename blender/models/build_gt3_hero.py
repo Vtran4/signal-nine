@@ -394,9 +394,14 @@ def build_splitter():
     y0 = n - 0.14
     y1 = n + 0.10
     w0 = halfwidth(n) + 0.03
-    verts = [(y0, -w0, 0.072), (y0, w0, 0.072), (y1, w0 * 0.92, 0.068),
-             (y1, -w0 * 0.92, 0.068), (y1, w0 * 0.92, 0.048), (y1, -w0 * 0.92, 0.048),
-             (y0, w0, 0.062), (y0, -w0, 0.062)]
+    # AXIS CONVENTION (coder's red-plane diagnosis, 2026-11-25): the gt3
+    # builder convention is (x=width, y=length, z=height) — these two parts
+    # had their tuples written (length, width, height) on (X, Y, Z), so the
+    # glTF Yup conversion exported them sideways (a 2.4m red plane off the
+    # flank). Swapped to width/length/height like every other part.
+    verts = [(-w0, y0, 0.072), (w0, y0, 0.072), (w0 * 0.92, y1, 0.068),
+             (-w0 * 0.92, y1, 0.068), (w0 * 0.92, y1, 0.048), (-w0 * 0.92, y1, 0.048),
+             (w0, y0, 0.062), (-w0, y0, 0.062)]
     faces = [(0, 1, 2, 3), (7, 6, 4, 5), (0, 3, 5, 7), (1, 0, 7, 6), (2, 1, 6, 4)]
     out = [mesh_from("gt3_splitter", verts, faces, MAT["carbon_weave_gloss"])]
     # lower lip band: wraps the nose bottom, leading edge shares the
@@ -404,8 +409,8 @@ def build_splitter():
     ly0, ly1 = n - 0.14, n + 0.55
     lw = halfwidth(ly1) + 0.01
     out.append(mesh_from("gt3_bumperlip", [
-        (ly0, -lw, 0.040), (ly0, lw, 0.040), (ly0, lw, 0.075), (ly0, -lw, 0.075),
-        (ly1, -lw, 0.040), (ly1, lw, 0.040), (ly1, lw, 0.078), (ly1, -lw, 0.078)],
+        (-lw, ly0, 0.040), (lw, ly0, 0.040), (lw, ly0, 0.075), (-lw, ly0, 0.075),
+        (-lw, ly1, 0.040), (lw, ly1, 0.040), (lw, ly1, 0.078), (-lw, ly1, 0.078)],
         [(0, 1, 2, 3), (4, 5, 6, 7), (0, 1, 5, 4), (1, 2, 6, 5),
          (2, 3, 7, 6), (3, 0, 4, 7)], MAT["paint_gt3"]))
     return out
