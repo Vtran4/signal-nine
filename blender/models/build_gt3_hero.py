@@ -201,41 +201,67 @@ def build_wheels():
     for tag, f_axle, side in (("fl", fa, -1), ("fr", fa, 1),
                               ("rl", ra, -1), ("rr", ra, 1)):
         x = SPEC["track_half"] * side
+        # WS-Q tire rebuild: flat-faced cylinder (two rings + two caps) —
+        # the torus buried the rim face inside the tube volume (disc radius
+        # 0.21 > torus hole 0.13), hiding spokes/ring/hub entirely.
         verts, faces = [], []
         R, rr = r - 0.10, 0.10
-        SU, SV = 22, 12
+        SU = 24
+        half = tw / 2
+        for xs in (-half, half):
+            for i in range(SU):
+                a = 2 * math.pi * i / SU
+                verts.append((xs, R * math.sin(a), R * math.cos(a)))
         for i in range(SU):
-            a = 2 * math.pi * i / SU
-            for j in range(SV):
-                b = 2 * math.pi * j / SV
-                rad = R + rr * math.cos(b)
-                verts.append(((tw / 2) * math.sin(b), rad * math.sin(a), rad * math.cos(a)))
-        for i in range(SU):
-            for j in range(SV):
-                i2, j2 = (i + 1) % SU, (j + 1) % SV
-                faces.append((i * SV + j, i2 * SV + j, i2 * SV + j2, i * SV + j2))
+            i2 = (i + 1) % SU
+            faces.append((i, i2, SU + i2, SU + i))
+        # caps as ANNULI (open centers): a solid cap disc seals the rim face
+        # inside the cylinder - the rim/spokes must show through the center
+        rin = 0.245  # sidewall covers ~75% of R: ring/barrel/spokes show
+        for si, xs in ((0, -half), (1, half)):
+            cap_v, cap_f = [], []
+            for i in range(SU):
+                a = 2 * math.pi * i / SU
+                cap_v.append((xs, rin * math.sin(a), rin * math.cos(a)))
+            base = len(verts)
+            for i in range(SU):
+                a = 2 * math.pi * i / SU
+                verts.append((xs, R * math.sin(a), R * math.cos(a)))
+            for i in range(SU):
+                i2 = (i + 1) % SU
+                cap_f.append((base + i, base + i2, base + SU + i2, base + SU + i))
+            verts.extend(cap_v)
+            faces.extend(cap_f)
         wheel = mesh_from("gt3_wheel_" + tag, verts, faces, MAT["tire"],
                           location=(x, f_axle, r), smooth=True)
         rv, rf = [], []
         rr2 = R - 0.02
-        for xs in (-tw * 0.28, tw * 0.28):
+        # rim = OPEN structure: thin outer barrel band (both x-faces) +
+        # 18 spokes + hub face. NO solid caps - a closed barrel face
+        # renders as a blank slate disc hiding the spokes behind it.
+        for xs in (-tw * 0.5, tw * 0.5):
             for k in range(14):
                 a = 2 * math.pi * k / 14
-                rv.append((xs, rr2 * math.sin(a), rr2 + rr2 * math.cos(a)))
+                rv.append((xs, rr2 * math.sin(a), rr2 * math.cos(a)))
+            for k in range(14):
+                a = 2 * math.pi * k / 14
+                rv.append((xs, 0.16 * math.sin(a), 0.16 * math.cos(a)))
         for k in range(14):
             k2 = (k + 1) % 14
             rf.append((k, k2, 14 + k2, 14 + k))
-        rf.append(tuple(range(14)))
-        rf.append(tuple(range(14, 28)))
+            rf.append((28 + k, 28 + k2, 42 + k2, 42 + k))
+                # NO caps: the barrel is open front and back — a solid cap face
+                # renders as a blank slate disc that hides the spokes behind it.
         # 18 paired spokes, thin (WS-Q carside.png revision: multi-spoke read)
         for s in range(9):
             a = 2 * math.pi * s / 9 + 0.3
             base = len(rv)
             ca, sa = math.cos(a), math.sin(a)
             for sx in (-1, 1):
-                for sy in (-0.055, 0.055):
+                for sy in (-0.009, 0.009):  # 18mm blades: 0.055 half-width overlapped
+                    # into a solid disc (18 x 0.11m >> mid-radius circle)
                     for sz in (rr2 * 0.30, rr2 * 0.85):
-                        rv.append((sx * tw * 0.22, sy * ca - sz * sa, sy * sa + sz * ca))
+                        rv.append((sx * tw * 0.46, sy * ca - sz * sa, sy * sa + sz * ca))
             for f in [(0, 1, 3, 2), (4, 5, 7, 6), (0, 4, 5, 1),
                       (2, 3, 7, 6), (0, 2, 6, 4), (1, 3, 7, 5)]:
                 rf.append(tuple(vi + base for vi in f))
@@ -243,33 +269,58 @@ def build_wheels():
                         location=(x, f_axle, r))
         # red rim-ring (WS-Q carside.png): thin red band at the rim barrel's
         # outer edge, both faces — the livery tie-in meshed at last
+        # red rim-ring as FLAT ANNULI in the wheel planes (carside.png):
+        # a barrel band is edge-on invisible from the side elevation; the
+        # read comes from rings lying IN the wheel face (inner radius just
+        # inside the barrel band, outer just past it)
         ring_v, ring_f = [], []
-        for xs in (-tw * 0.29, tw * 0.29):
+        rin_r, rout_r = 0.155, 0.218
+        for xs in (-tw * 0.5 + 0.004, tw * 0.5 - 0.004):
+            for rad in (rin_r, rout_r):
+                for k in range(28):
+                    a = 2 * math.pi * k / 28
+                    ring_v.append((xs, rad * math.sin(a), rad * math.cos(a)))
+        for si in (0, 1):
+            b = si * 56
             for k in range(28):
-                a = 2 * math.pi * k / 28
-                ring_v.append((xs, (R - 0.015) * math.sin(a),
-                               rr2 + (R - 0.015) * math.cos(a)))
-        for k in range(28):
-            k2 = (k + 1) % 28
-            ring_f.append((k, k2, 28 + k2, 28 + k))
-        ring_f.append(tuple(range(28)))
-        ring_f.append(tuple(range(28, 56)))
+                k2 = (k + 1) % 28
+                ring_f.append((b + k, b + k2, b + 28 + k2, b + 28 + k))
         mesh_from("gt3_rimring_" + tag, ring_v, ring_f, MAT["caliper_red"],
                   location=(x, f_axle, r))
-        # hub cap: flush just behind the tire's outer face (was recessed ->
-        # rendered as a black void), mid-gray
+        # hub cap: small center-lock disc at the wheel center (radius
+        # 0.055 sits inside the spokes' inner ends; the old rr2 radius
+        # made a full-face disc that read as a solid rim through the
+        # open barrel), flush just outboard of the tire face
         hub_v, hub_f = [], []
         for k in range(14):
             a = 2 * math.pi * k / 14
-            hub_v.append((tw * 0.5 - 0.008, rr2 * math.sin(a), rr2 + rr2 * math.cos(a)))
+            hub_v.append((tw * 0.5 + 0.004, 0.055 * math.sin(a), 0.055 * math.cos(a)))
         mesh_from("gt3_hub_" + tag, hub_v, [tuple(range(14))],
           pbr("gt3_hub_gray", (0.30, 0.30, 0.31), 0.0, 0.6),
           location=(x, f_axle, r))
-        # red caliper block behind the spokes
-        mesh_from("gt3_caliper_" + tag, [
-                (-tw * 0.10, -0.16, 0.14), (tw * 0.10, -0.16, 0.14),
-                (tw * 0.10, 0.10, 0.20), (-tw * 0.10, 0.10, 0.20)],
-                [(0, 1, 2, 3)], MAT["caliper_red"], location=(x, f_axle, r))
+        # red caliper block behind the spokes: an ARC segment hugging the
+        # barrel (12 o'clock, 45 deg span) with real thickness - a flat
+        # plate at the hub read as nothing; the arc reads as a caliper
+        cal_v, cal_f = [], []
+        r_cal_in, r_cal_out = 0.095, 0.155
+        cal_seg = 7
+        for xs in (-tw * 0.10, tw * 0.10):
+            for rad in (r_cal_in, r_cal_out):
+                for k in range(cal_seg + 1):
+                    a = math.pi / 2 + (math.pi / 4) * k / cal_seg
+                    cal_v.append((xs, rad * math.sin(a), rad * math.cos(a)))
+        for b in (0, 2 * (cal_seg + 1)):
+            for rad_i in (0, 1):
+                base = b + rad_i * (cal_seg + 1)
+                for k in range(cal_seg):
+                    cal_f.append((base + k, base + k + 1,
+                                  base + (cal_seg + 1) + k + 1,
+                                  base + (cal_seg + 1) + k))
+        for b in (0, 2 * (cal_seg + 1)):
+            cal_f.append((b, b + cal_seg, b + 2 * (cal_seg + 1) - 1,
+                          b + (cal_seg + 1)))
+        mesh_from("gt3_caliper_" + tag, cal_v, cal_f, MAT["caliper_red"],
+                  location=(x, f_axle, r))
         out.append((wheel, rim))
     return out
 
