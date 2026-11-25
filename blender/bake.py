@@ -23,6 +23,11 @@ os.makedirs(ASSETS, exist_ok=True)
 argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 MODE = argv[0] if argv else "--test"
 ENV_NAME = next((a.split("=", 1)[1] for a in argv if a.startswith("--env=")), None)
+# WS-B3 golden-hour panos: --pano-time=goldenhour renders the pano camera
+# under a warm low-sun rig variant and writes a SUFFIXED env asset
+# (env_coast_goldenhour.jpg) — the certified daytime env_coast.jpg is never
+# touched. Set-pieces per Coder's rig slots (night waits on WS-B2 content).
+PANO_TIME = next((a.split("=", 1)[1] for a in argv if a.startswith("--pano-time=")), None)
 GROUPS = {"coastal": 2048, "downtown": 2048, "props": 1024, "canyon": 2048}
 TEST_RES_SCALE = {"coastal": 512, "downtown": 512, "props": 512, "canyon": 512}
 SAMPLES = {"--test": 64, "--full": 384}
@@ -513,6 +518,7 @@ def bake_group(g, objs, res, samples, margin):
 
 # ---------------- env panorama (--full) ----------------
 def render_pano():
+    suffix = ""
     old = bpy.data.objects.get("pano")
     if old:
         bpy.data.objects.remove(old, do_unlink=True)
@@ -551,8 +557,39 @@ def render_pano():
     saved_strength = bg.inputs[1].default_value if bg else None
     if bg is not None:
         bg.inputs[1].default_value = 1.0
-    scene.render.filepath = os.path.join(ASSETS, "env_coast.jpg")
+    if PANO_TIME == "goldenhour":
+        # v2 (blowout fix): the bake world is the LOCKED HDRI (no sky node —
+        # set_world_env removes them; a flat-color tint hits a linked input
+        # and is ignored). Golden-hour read = HDRI dimmed to 0.3 + a warm
+        # low-elevation SUN lamp keying the frame; both pano-only, cleaned up
+        # after the render.
+        sun = bpy.data.lights.new("__pano_gh_sun", type="SUN")
+        # v3 per the clip analysis: energy 1.2 (4 slammed 13x over the dimmed
+        # env), 3000K amber, LOW elevation (rake 12deg -> long shadows), and
+        # Filmic so the warm channels survive to the 8-bit jpg
+        sun.energy = 1.8
+        sun.color = (1.0, 0.42, 0.15)
+        sun_ob = bpy.data.objects.new("__pano_gh_sun", sun)
+        scene.collection.objects.link(sun_ob)
+        sun_ob.rotation_euler = (math.radians(82), 0.0, math.radians(250))
+        if bg is not None:
+            bg.inputs[1].default_value = 0.22
+        saved_vt = scene.view_settings.view_transform
+        scene.view_settings.view_transform = "Filmic"
+        scene.view_settings.look = "Medium Contrast"
+        suffix = "_goldenhour"
+    scene.render.filepath = os.path.join(
+        ASSETS, "env_coast%s.jpg" % suffix)
     bpy.ops.render.render(write_still=True)
+    if PANO_TIME == "goldenhour":
+        s = bpy.data.objects.get("__pano_gh_sun")
+        if s:
+            ld = s.data
+            bpy.data.objects.remove(s, do_unlink=True)
+            if ld and ld.users == 0:
+                bpy.data.lights.remove(ld)
+    if PANO_TIME == "goldenhour" and saved_vt:
+        scene.view_settings.view_transform = saved_vt
     if bg is not None and saved_strength is not None:
         bg.inputs[1].default_value = saved_strength
     print("PANO_OK", scene.render.filepath)
@@ -581,6 +618,12 @@ if MODE == "--export-only":
                                        "light": "light_%s.png" % g}
     bpy.ops.wm.save_mainfile()
     print("BLEND_SAVED (atlas UVs persisted)")
+elif MODE == "--pano-only":
+    # pano render ONLY — no bake_group passes, no UV re-assignment, no glb
+    # re-export (the golden-hour env variant is the deliverable)
+    render_pano()
+    manifest["mode_note"] = "--pano-only: env variant only, atlases untouched"
+    print("BAKE_DONE mode=--pano-only")
 else:
     for g, objs in groups.items():
         res = GROUPS[g] if MODE == "--full" else TEST_RES_SCALE[g]
