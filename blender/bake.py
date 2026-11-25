@@ -191,6 +191,15 @@ def collect_groups():
     for ob in scene.objects:
         if ob.type != "MESH" or ob.name.startswith("__bake"):
             continue
+        # neon_* self-textured emissive devices (WS-B2 sign kit) are EXCLUDED
+        # from the baked-atlas pipeline: their glyph texture + emission ride
+        # the GLB as the client's emissive asset (neonI rig scales
+        # emissiveIntensity). Baking them into shelf tiles produced
+        # position-cursed void tiles (7 bakes of evidence) for zero benefit —
+        # the device carries its own content by design.
+        if any(m and m.name.startswith("neon_") for m in ob.data.materials if m):
+            print("NEON_BYPASS", ob.name)
+            continue
         g = group_of(ob.name)
         if g:
             groups.setdefault(g, []).append(ob)
@@ -321,6 +330,19 @@ def white_override(g, img):
     ensure_img_node(m, img)
     return m
 
+def light_material_for(orig_mats, g, img):
+    """Emissive statics (neon_* — the WS-B2 sign kit) keep their OWN material
+    in the light pass: the override would wipe their Emission node, and the
+    baked glyph structure in the light atlas IS the client's emissiveMap
+    asset (neonI consumer). Everything else gets the flat white override so
+    the bake measures pure incident light. NOTE: check the SAVED original
+    materials — the caller clears ob.data.materials before applying."""
+    for mat in orig_mats:
+        if mat and mat.name.startswith("neon_"):
+            ensure_img_node(mat, img)
+            return mat
+    return white_override(g, img)
+
 def image_stats(img, stride=997):
     import array
     n = img.size[0] * img.size[1] * img.channels
@@ -412,6 +434,16 @@ def bake_group(g, objs, res, samples, margin):
     import time
     t0 = time.time()
     tiles = uv_pass(g, objs, res)
+    # Margin clamp (2026-11-25, neon-sign round): bake margin dilates each
+    # island OUTWARD into neighboring texels — with small shelf-packed tiles
+    # (the 37px sign tiles) edge-to-edge, a 16px margin lets the LAST-baked
+    # object's dilation paint over its neighbors, nondeterministically voiding
+    # 2-3 tiles per run (the victims moved between identical runs). Clamp the
+    # margin to ~1/5 of the smallest tile so dilation stays inside the tile.
+    if tiles:
+        min_side = min((r[2] - r[0]) * res for r in tiles.values())
+        margin = max(2, min(margin, int(min_side * 0.2)))
+        print("MARGIN_CLAMP %s -> %dpx (min tile %.1fpx)" % (g, margin, min_side))
     albedo = fresh_image("albedo_" + g, res, linear=False)
     light = fresh_image("light_" + g, res, linear=True)
 
@@ -436,8 +468,9 @@ def bake_group(g, objs, res, samples, margin):
     saved = {ob.name: [m for m in ob.data.materials if m] for ob in objs}
     lo = white_override(g, light)
     for ob in objs:
+        keep = light_material_for(saved[ob.name], g, light)
         ob.data.materials.clear()
-        ob.data.materials.append(lo)
+        ob.data.materials.append(keep)
     full = [o for o in objs if not (o.name.endswith("_lod1") or o.name.endswith("_lod2"))]
     lods = [o for o in objs if o not in full]
     for stage, hidden in ((full, lods), (lods, full)):
