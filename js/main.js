@@ -143,6 +143,9 @@ window.S9 = window.S9 || {};
         if (rig.fogFar !== undefined) scene.fog.far = rig.fogFar;
         // backgroundIntensity applied after the env loads (below)
         window.__rigBg = rig.bgIntensity;
+        if (rig.envIntensity !== undefined) scene.environmentIntensity = rig.envIntensity;
+        if (rig.bloomThreshold !== undefined && window.__speedfx && window.__speedfx.bloom)
+          window.__speedfx.bloom.threshold = rig.bloomThreshold;
         // B1b2: rig-driven procedural sky swap — the near-white pano dome
         // dominates luminance at any intensity, so night/golden-hour rigs
         // drop the pano background + IBL and re-show the gradient dome
@@ -320,6 +323,11 @@ window.S9 = window.S9 || {};
 
     const physics = new S9.Physics(scene);
     const speedfx = new S9.SpeedFX(renderer, scene, camera, P.fx, P.lit);
+    window.__speedfx = speedfx;  // rig access (bloomThreshold)
+    // the rig block runs before this construction — apply the rig's bloom threshold here
+    const rigNow = S9.CFG.lightRigs && S9.CFG.lightRigs[P.track];
+    if (P.lit && speedfx.bloom && rigNow && rigNow.bloomThreshold !== undefined)
+      speedfx.bloom.threshold = rigNow.bloomThreshold;
     const audio = new S9.AudioSet();
     const game = new S9.Game({ scene, camera, renderer, track, car, traffic, physics, speedfx, audio, assets: { carsGltf, trafficGltf, rivalsGltf } });
     traffic.debrisRef = game.debris;   // traffic shatters feed the shared debris engine

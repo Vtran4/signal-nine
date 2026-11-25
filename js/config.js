@@ -90,9 +90,15 @@ window.S9 = window.S9 || {};
     // intensity (night dims the daytime pano until real night panos exist —
     // modeler's WS-B2 night-env capture is the proper fix).
     lightRigs: {
-      coastal: {                // B1f: fog trim only (the over-haze flag) —
-                                // colors/intensities stay certified
+      coastal: {                // B1f (measured): the over-haze layer is the PANO/
+                                // IBL, not scene.fog (fog live-verified 480/2200 =
+                                // intended; the whiteout is pano+env dominance).
+                                // bg 1.0->0.55 + env 1.0->0.75 clears the haze with
+                                // the sky still reading bright daytime; colors stay
+                                // certified. fog trim kept (near 480/far 2200).
         fogNear: 480, fogFar: 2200,
+        bgIntensity: 0.55, envIntensity: 0.75,
+        bloomThreshold: 0.55,   // bright daytime pano (bg 0.55) — sky-safe default
       },
       downtown: {               // permanent-night kit target: neon-lit dark city
         hemiSky: 0x2a3448, hemiGround: 0x1a1610, hemiI: 0.32,
@@ -100,6 +106,8 @@ window.S9 = window.S9 || {};
         fog: 0x11141c, bgIntensity: 0.18,
         emissiveI: 1.0,         // WS-B1c: procedural lit windows on at night
         neonI: 2.0,             // WS-B2 neon signs: read hotter than window interiors
+        bloomThreshold: 0.28,   // B1f measured: taillight lum ~0.317 (ff2a1a x1.4, REC-709)
+                                // — must sit ABOVE the threshold; sky (bg 0.18 x navy) is far below
         // B1b2: swap the near-white pano dome for the procedural gradient sky
         // (the pano dominates luminance at any intensity — verified); IBL from
         // the daytime pano drops to near-zero (night has no daylight bounce)
@@ -111,6 +119,7 @@ window.S9 = window.S9 || {};
         fog: 0xe8c8a0, bgIntensity: 0.8,
         emissiveI: 0.15,        // a few lit windows at dusk
         neonI: 0.4,             // dusk neon: dimmed
+        bloomThreshold: 0.6,    // dusk sky (bg 0.8 x warm gradient) sits high — keep bloom sky-clean
         useProceduralSky: true, skyTop: 0x88a8d8, skyLow: 0xffb870, envI: 0.5,
       },
     },

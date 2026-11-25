@@ -112,8 +112,9 @@ window.S9 = window.S9 || {};
           new THREE.Vector2(innerWidth || 1280, innerHeight || 720),
           0.4,   // strength
           0.5,   // radius
-          0.7);  // threshold — B1f: 0.85 left rest-state taillights unbloomed;
-                 // 0.7 catches them while the night sky (dark) stays clean
+          0.7);  // default threshold — the per-track RIG sets bloomThreshold
+                 // (measured: taillight luminance ~0.317 < 0.7, so 0.7 could
+                 // never reach it; night rig 0.28 puts it just above)
         this.composer.addPass(this.bloom);
       }
       if (THREE.OutputPass) this.composer.addPass(new THREE.OutputPass());
