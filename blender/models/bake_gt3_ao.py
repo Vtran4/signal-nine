@@ -19,7 +19,7 @@ objs = sorted([o for o in bpy.data.objects
                and o.name != "gt3_ground"], key=lambda o: o.name)
 print("AO_PARTS", len(objs))
 
-RES = 1024
+RES = 2048  # WS-Q hi-res round: 2048^2 body maps (was 1024)
 INSET = 12.0 / RES
 
 def area_of(ob):
@@ -46,13 +46,35 @@ def smart_unwrap(ob):
 
 def shelf_pack(entries):
     """Area-share shelf pack (bake.py pattern): tiles stacked in rows by
-    decreasing side, rect = [u0, v0, u1, v1]."""
-    total = sum(e[1] for e in entries)
+    decreasing side, rect = [u0, v0, u1, v1]. WS-Q fix: SHRINK-TO-FIT —
+    the raw pack can exceed v=1.0 (it did: 45 of 49 tiles landed at
+    v>1 and baked EMPTY, silently, since the first GT3 AO round); a
+    uniform side scale keeps relative tile sizes while forcing the
+    packed height inside the atlas."""
+    lo, hi = 0.0, 1.0
+    for _ in range(28):
+        f = (lo + hi) / 2
+        y_max = x = y = 0.0
+        row_h = 0.0
+        for name, side in sorted(entries, key=lambda e: -e[1]):
+            w = h = side * f
+            if x + w > 1.0:
+                x = 0.0
+                y += row_h
+                row_h = 0.0
+            x += w
+            row_h = max(row_h, h)
+            y_max = max(y_max, y + h)
+        if y_max <= 1.0:
+            lo = f  # feasible: the max feasible scale is >= f
+        else:
+            hi = f  # infeasible: go smaller
+    f = lo
     tiles = {}
     x = y = 0.0
     row_h = 0.0
     for name, side in sorted(entries, key=lambda e: -e[1]):
-        w = h = side
+        w = h = side * f
         if x + w > 1.0:
             x = 0.0
             y += row_h
@@ -134,6 +156,46 @@ ao.file_format = "PNG"
 ao.save()
 print("AO_SAVED", ao.filepath_raw)
 
+# ---- WS-Q hi-res: ALBEDO pass on the SAME atlas UVs --------------------
+# paint_gt3 bakes NEUTRAL WHITE so the client's per-variant paint color
+# multiplies on top (same pattern as the AO multiply slot); carbon/tire/
+# glass/lights/accents keep their true base colors.
+paint = bpy.data.materials.get("paint_gt3")
+saved_paint = None
+if paint and paint.use_nodes:
+    for n in paint.node_tree.nodes:
+        if n.type == "BSDF_PRINCIPLED":
+            saved_paint = tuple(n.inputs["Base Color"].default_value)
+            n.inputs["Base Color"].default_value = (1.0, 1.0, 1.0, 1.0)
+            break
+print("ALBEDO_PAINT_WHITENED", saved_paint is not None)
+alb = bpy.data.images.new("alb_gt3", RES, RES, alpha=False)
+for ob in objs:
+    for mat in ob.data.materials:
+        if mat and mat.use_nodes:
+            for n in mat.node_tree.nodes:
+                if n.type == "TEX_IMAGE" and n.image and n.image.name == ao.name:
+                    n.image = alb
+bpy.ops.object.bake(type="DIFFUSE", use_clear=True, margin=12,
+                    pass_filter={"COLOR"})
+alb.filepath_raw = os.path.join(ASSETS, "alb_gt3.png")
+alb.file_format = "PNG"
+alb.save()
+print("ALB_SAVED", alb.filepath_raw)
+# restore the paint color + re-point the tex nodes at the AO image
+if saved_paint is not None:
+    for n in paint.node_tree.nodes:
+        if n.type == "BSDF_PRINCIPLED":
+            n.inputs["Base Color"].default_value = saved_paint
+            break
+for ob in objs:
+    for mat in ob.data.materials:
+        if mat and mat.use_nodes:
+            for n in mat.node_tree.nodes:
+                if n.type == "TEX_IMAGE" and n.image and n.image.name == alb.name:
+                    n.image = ao
+print("ALBEDO_RESTORED")
+
 # mean/max sanity (stride-4-safe: sample R channel only)
 import array
 n = ao.size[0] * ao.size[1] * ao.channels
@@ -154,6 +216,26 @@ report = {"file": "ao_gt3.png", "res": RES, "parts": len(objs),
 with open(os.path.join(ASSETS, "ao_gt3_report.json"), "w") as f:
     json.dump(report, f, indent=1)
 print("AO_REPORT_OK")
+# albedo report: same rects (shared atlas UVs), paint-neutrality contract
+import array as _arr
+n_alb = alb.size[0] * alb.size[1] * alb.channels
+buf_a = _arr.array("f", bytes(4 * n_alb))
+alb.pixels.foreach_get(buf_a)
+tot_a = cnt_a = 0
+for i in range(0, n_alb, 997):
+    tot_a += buf_a[i]
+    cnt_a += 1
+alb_report = {"file": "alb_gt3.png", "res": RES, "parts": len(objs),
+              "rects": report["rects"],
+              "mean": round(tot_a / max(1, cnt_a), 4),
+              "consumer": ("diffuse albedo; paint_gt3 regions are NEUTRAL "
+                           "WHITE — client multiplies the per-variant paint "
+                           "color on top; carbon/tire/glass/accents carry "
+                           "their true colors"),
+              "paint_neutral": True}
+with open(os.path.join(ASSETS, "alb_gt3_report.json"), "w") as f:
+    json.dump(alb_report, f, indent=1)
+print("ALB_REPORT_OK")
 
 # re-export the glb so it carries the AO UV layout
 g["export_glb"]()

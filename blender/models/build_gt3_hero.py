@@ -172,7 +172,7 @@ def hull_ring(f):
     tuck = 0.15 * max(gauss(f - fa, 0.16), gauss(f - ra, 0.16))
     w = halfwidth(f)
     ring = []
-    for lf, uf in HULL_RING:
+    for lf, uf in HULL_RING_D:
         w_eff = w * (1.0 - tuck) if uf <= 0.45 else w
         ring.append((lf * w_eff, f, fl + uf * (belt - fl)))
     return ring
@@ -183,10 +183,28 @@ def gh_ring(f):
     belt = curve(SPEC["belt"], f)
     top = curve(SPEC["top"], f)
     gw = halfwidth(f) * gwf
-    return [(lf * gw, f, belt + uf * (top - belt)) for lf, uf in GH_RING]
+    return [(lf * gw, f, belt + uf * (top - belt)) for lf, uf in GH_RING_D]
 
 
 # ---------------- build ----------------
+def densify(profile, k):
+    """Shape-preserving densification: insert k linear interpolants into
+    every span of a [(lf, uf), ...] profile. Control points unchanged, so
+    the silhouette is identical — only tessellation density rises."""
+    out = []
+    for i, (a, b) in enumerate(zip(profile, profile[1:])):
+        out.append(a)
+        for j in range(1, k + 1):
+            t = j / (k + 1)
+            out.append((a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t))
+    out.append(profile[-1])
+    return out
+
+
+# WS-Q hi-res: densified ring profiles (shape-preserving; see densify())
+HULL_RING_D = densify(HULL_RING, 3)   # 13 -> 49 pts
+GH_RING_D = densify(GH_RING, 1)       # 7 -> 13 pts
+
 def clear_scene():
     for ob in list(bpy.context.scene.objects):
         bpy.data.objects.remove(ob, do_unlink=True)
@@ -206,7 +224,7 @@ def build_wheels():
         # 0.21 > torus hole 0.13), hiding spokes/ring/hub entirely.
         verts, faces = [], []
         R, rr = r - 0.10, 0.10
-        SU = 24
+        SU = 36
         half = tw / 2
         for xs in (-half, half):
             for i in range(SU):
@@ -295,7 +313,12 @@ def build_wheels():
         for k in range(14):
             a = 2 * math.pi * k / 14
             hub_v.append((tw * 0.5 + 0.004, 0.055 * math.sin(a), 0.055 * math.cos(a)))
-        mesh_from("gt3_hub_" + tag, hub_v, [tuple(range(14))],
+        # WS-Q AO fix: the single-ngon disc's winding gives a -X normal;
+        # on the right-side wheels that points INBOARD (the AO bake's ray
+        # hemisphere then sits inside the wheel → hub_fr/hub_rr baked
+        # black while fl/rl baked gray). Reverse the winding on +X sides.
+        hub_face = tuple(range(14)) if side < 0 else tuple(range(13, -1, -1))
+        mesh_from("gt3_hub_" + tag, hub_v, [hub_face],
           pbr("gt3_hub_gray", (0.30, 0.30, 0.31), 0.0, 0.6),
           location=(x, f_axle, r))
         # red caliper block behind the spokes: an ARC segment hugging the
@@ -329,12 +352,15 @@ def build_body():
     """Hull loft + greenhouse. The canopy splits into a GLASS band (f -0.95
     to -0.38: raked windshield + side windows) and a PAINT roof cap (f -0.38
     to +0.35, upper canopy) — the break is what makes cab-forward read."""
-    n_st = 64
+    # WS-Q hi-res round: shape-preserving densification (densify() keeps
+    # every control point; only tessellation density rises) — target ~21k
+    # tris on the REVISED silhouette for the 2048^2 body maps
+    n_st = 160
     f0, f1 = SPEC["nose"], SPEC["tail"]
     rings = [hull_ring(f0 + (f1 - f0) * i / (n_st - 1)) for i in range(n_st)]
     body = loft("gt3_body", rings, MAT["paint_gt3"], smooth=True)
     g0, g1, _ = SPEC["gh"]
-    gn = 12
+    gn = 28
     grings = [gh_ring(g0 + (g1 - g0) * i / (gn - 1)) for i in range(gn)]
     glass = loft("gt3_glass", grings, MAT["glass_gt3"], smooth=True)
     # paint roof cap over the rear canopy: FLATTER fall than the glass slope
@@ -342,7 +368,7 @@ def build_body():
     # extends PAST the greenhouse end (0.42) so it merges into the deck and
     # the junction crease softens
     f_cap0, f_cap1 = -0.38, 0.42
-    cn = 12
+    cn = 24
     cap_rings = []
     for i in range(cn):
         f = f_cap0 + (f_cap1 - f_cap0) * i / (cn - 1)
