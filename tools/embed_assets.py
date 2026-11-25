@@ -93,7 +93,7 @@ def main():
     # relative fetch on file:// is the crossOrigin failure class that cost us
     # the white-texture round; pm-s9 ruling: consumer + embed land together)
     for extra in ("tracks_data.json", "env_coast.jpg", "gt3_liveries.json",
-                  "alb_gt3.png", "ao_gt3.png"):
+                  "alb_gt3.png", "ao_gt3.png", "nightkit_emissive.png"):
         if os.path.exists(os.path.join(ASSETS, extra)):
             names.append(extra)
 
