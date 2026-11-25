@@ -49,8 +49,8 @@ window.S9 = window.S9 || {};
         if (road > 0.001) {
           vec2 np = vec2(vUv.x * 90.0, vUv.y * 14.0 - uTime * 2.6);
           float n = vnoise(np) - 0.5 + 0.5 * (vnoise(np * 2.7 + 31.7) - 0.5);
-          uv.x += n * 0.0022 * (0.35 + uSpeed) * road;
-          uv.y += n * 0.0011 * (0.35 + uSpeed) * road;
+          uv.x += n * 0.0034 * (0.35 + uSpeed) * road;
+          uv.y += n * 0.0017 * (0.35 + uSpeed) * road;
         }
 
         // --- radial motion blur: taps step toward the vanishing point ---
@@ -68,11 +68,14 @@ window.S9 = window.S9 || {};
         vec3 col = acc;
         float streakMask = smoothstep(0.28, 0.72, r);
         if (uBoost > 0.01 && streakMask > 0.001) {
+          // post retune: two taps (near + far) with falloff — distinct elongated
+          // streak lines instead of one diffuse smear (identity-stack verify read)
           vec2 soff = dir * (0.045 + 0.10 * r) * uBoost;
           soff.x /= uAspect;
-          vec3 sm = texture2D(tDiffuse, uv + soff).rgb;
-          float lum = dot(sm, vec3(0.35, 0.5, 0.15));
-          col += sm * streakMask * uBoost * (0.30 + 0.5 * lum);
+          vec3 sm1 = texture2D(tDiffuse, uv + soff).rgb;
+          vec3 sm2 = texture2D(tDiffuse, uv + soff * 1.9).rgb;
+          float lum = dot(sm1, vec3(0.35, 0.5, 0.15));
+          col += (sm1 + sm2 * 0.55) * streakMask * uBoost * (0.30 + 0.5 * lum);
         }
 
         // --- subtle 2002-style vignette that closes in with speed ---
