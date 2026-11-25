@@ -49,7 +49,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ASSETS = os.path.join(ROOT, "assets")
 TARGETS = os.path.join(ROOT, "tools", "gain_targets.json")
 
-CURRENT_GAIN = {"coastal": 2.4, "props": 2.2, "canyon": 1.4, "downtown": 2.4}
+CURRENT_GAIN = {"coastal": 2.4, "props": 1.78, "canyon": 1.39, "downtown": 1.01}  # landed map (post-neon rebake; keep in sync with js/track.js GAIN)
 AMBIENT = 0.12
 
 
