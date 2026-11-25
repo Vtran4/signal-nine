@@ -1,0 +1,189 @@
+{
+ "file": "nightkit_emissive.png",
+ "res": 4096,
+ "blocks": 10,
+ "windows_lit_total": 2078,
+ "consumer": "emissiveMap replacing the procedural canvas; block rects = live tracks.glb uv bboxes (nightkit_rects.json); windows sub-bloom (structure), banner strips full-alpha (bloom carriers), cyan/magenta per downtowntrack.png",
+ "per_block": [
+  {
+   "block": "downtown_block_00",
+   "rect": [
+    0.41936,
+    0.8291,
+    0.44976,
+    0.8595
+   ],
+   "rect_px": [
+    1717,
+    575,
+    1842,
+    700
+   ],
+   "windows_lit": 182,
+   "windows_unlit": 158,
+   "banner": "magenta"
+  },
+  {
+   "block": "downtown_block_01",
+   "rect": [
+    0.10622,
+    0.8291,
+    0.13883,
+    0.86171
+   ],
+   "rect_px": [
+    435,
+    566,
+    568,
+    700
+   ],
+   "windows_lit": 220,
+   "windows_unlit": 198,
+   "banner": "magenta"
+  },
+  {
+   "block": "downtown_block_02",
+   "rect": [
+    0.18571,
+    0.8291,
+    0.21687,
+    0.86026
+   ],
+   "rect_px": [
+    760,
+    572,
+    888,
+    700
+   ],
+   "windows_lit": 218,
+   "windows_unlit": 160,
+   "banner": "cyan"
+  },
+  {
+   "block": "downtown_block_03",
+   "rect": [
+    0.49663,
+    0.8291,
+    0.52493,
+    0.8574
+   ],
+   "rect_px": [
+    2034,
+    584,
+    2150,
+    700
+   ],
+   "windows_lit": 168,
+   "windows_unlit": 136,
+   "banner": "cyan"
+  },
+  {
+   "block": "downtown_block_04",
+   "rect": [
+    0.26374,
+    0.8291,
+    0.29469,
+    0.86005
+   ],
+   "rect_px": [
+    1080,
+    573,
+    1207,
+    700
+   ],
+   "windows_lit": 222,
+   "windows_unlit": 156,
+   "banner": "magenta"
+  },
+  {
+   "block": "downtown_block_05",
+   "rect": [
+    0.64676,
+    0.8291,
+    0.6726,
+    0.85494
+   ],
+   "rect_px": [
+    2649,
+    594,
+    2754,
+    700
+   ],
+   "windows_lit": 151,
+   "windows_unlit": 104,
+   "banner": "cyan"
+  },
+  {
+   "block": "downtown_block_06",
+   "rect": [
+    0.02344,
+    0.8291,
+    0.05935,
+    0.86501
+   ],
+   "rect_px": [
+    96,
+    552,
+    243,
+    700
+   ],
+   "windows_lit": 274,
+   "windows_unlit": 230,
+   "banner": "cyan"
+  },
+  {
+   "block": "downtown_block_07",
+   "rect": [
+    0.34157,
+    0.8291,
+    0.37249,
+    0.86002
+   ],
+   "rect_px": [
+    1399,
+    573,
+    1525,
+    700
+   ],
+   "windows_lit": 197,
+   "windows_unlit": 163,
+   "banner": "cyan"
+  },
+  {
+   "block": "downtown_block_08",
+   "rect": [
+    0.9193,
+    0.02344,
+    0.95583,
+    0.05996
+   ],
+   "rect_px": [
+    3765,
+    3850,
+    3915,
+    4000
+   ],
+   "windows_lit": 291,
+   "windows_unlit": 213,
+   "banner": "cyan"
+  },
+  {
+   "block": "downtown_block_09",
+   "rect": [
+    0.57181,
+    0.8291,
+    0.59989,
+    0.85718
+   ],
+   "rect_px": [
+    2342,
+    584,
+    2457,
+    700
+   ],
+   "windows_lit": 155,
+   "windows_unlit": 149,
+   "banner": "cyan"
+  }
+ ]
+}
