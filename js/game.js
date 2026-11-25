@@ -462,8 +462,9 @@ window.S9 = window.S9 || {};
     // Phase E4 wiring: shatter hooks + rebuild closures for every racer
     #wireShatter() {
       const rebuildFor = (car, gltf, tok) => () => {
+        const src2 = car.buildSource || { gltf, tok };  // P1: gt3 rebuilds from gt3.glb
         const old = car.mesh;
-        car.swapMesh(S9.buildCarFromGltf(gltf, tok, car.cfg && car.cfg.paint));
+        car.swapMesh(S9.buildCarFromGltf(src2.gltf, src2.tok, car.cfg && car.cfg.paint));
         this.scene.remove(old);
         this.scene.add(car.mesh);
       };

@@ -269,6 +269,10 @@ window.S9 = window.S9 || {};
     if (gt3Gltf && carCfg.id === 'gt3') {
       const old = car.mesh;
       car.swapMesh(S9.buildCarFromGltf(gt3Gltf, 'gt3'));
+      // P1 respawn fix: remember the build source — the shatter-rebuild closure
+      // defaulted to carsGltf, which has NO gt3 body, so respawn swapped the
+      // full gt3 mesh for an empty shell (children 45 -> 0, blob shadow only).
+      car.buildSource = { gltf: gt3Gltf, tok: 'gt3' };
       scene.remove(old);
       scene.add(car.mesh);
       car.isGlb = true;

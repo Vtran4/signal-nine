@@ -135,6 +135,22 @@ window.S9 = window.S9 || {};
     if (isPolice && (beacons.red.length || beacons.blue.length)) {
       group.userData.beacons = beacons;   // pulse loop in Car.update
     }
+    // Axis-swap guard (red-plane rider, Victor-confirmed unwanted): the shipped
+    // gt3.glb's bumperlip/splitter carry (length,width,height) verts written on
+    // (X,Z) — a 2m-wide thin red quad sticking out the car's LEFT flank at
+    // mid-height, reading in chase view as a flat red plane floating on the
+    // shoulder. Hide malformed ones (bbox longer on X than Z); the corrected
+    // modeler re-export passes this guard and shows the parts again.
+    group.traverse((o) => {
+      if (o.isMesh && /gt3_(bumperlip|splitter)/.test(o.name || '') && o.geometry) {
+        if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+        const bb = o.geometry.boundingBox;
+        // malformed = sits OUTSIDE the body's half-width (~1.05): the shipped
+        // glb has these at x -2.41..-1.73 (left flank, mid-height) instead of
+        // wrapped around the nose. Correct exports stay within the body width.
+        if (bb.min.x < -1.4 || bb.max.x > 1.4) o.visible = false;
+      }
+    });
     return { group, wheels, front };
   };
 
