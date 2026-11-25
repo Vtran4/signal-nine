@@ -66,6 +66,73 @@ window.S9 = window.S9 || {};
     for (const g in groups) for (const n of groups[g].nodes || []) nodeToGroup[n] = g;
     const GAIN = { coastal: 2.4, props: 1.78, canyon: 1.39, downtown: 1.01 };  // re-solved post-rebake by tools/solve_gain.py (relative anchor, gain_targets.json snapshot)
     const lightTex = {};                    // per-group light atlas (WS-B2 neon emissive source)
+    // WS-B1c lit-window canvas — built BEFORE the material factory so the downtown
+    // material is CONSTRUCTED with its emissiveMap already set. pm's val14 probe: a
+    // post-first-render emissiveMap assign + needsUpdate does NOT re-add the sampler
+    // slot to the cached program (USE_EMISSIVEMAP never compiled; mapUv slot false) —
+    // construction-time assignment is the only path that compiles it.
+    let winTex = null;
+    if (lit && groups.downtown) {
+      const E = 1024;
+      const cv = document.createElement('canvas'); cv.width = E; cv.height = E;
+      const cx = cv.getContext('2d');
+      cx.fillStyle = '#000000'; cx.fillRect(0, 0, E, E);
+      let hsh = 2166136261;
+      staticRoot.traverse((o) => {
+        if (!o.isMesh || !o.name || !o.name.startsWith('downtown_block')) return;
+        const uv = o.geometry.attributes.uv;
+        if (!uv) return;
+        let u0 = 1, u1 = 0, v0 = 1, v1 = 0;
+        for (let i = 0; i < uv.count; i++) {
+          const u = uv.getX(i), v = uv.getY(i);
+          u0 = Math.min(u0, u); u1 = Math.max(u1, u);
+          v0 = Math.min(v0, v); v1 = Math.max(v1, v);
+        }
+        for (let i = 0; i < o.name.length; i++) { hsh ^= o.name.charCodeAt(i); hsh = (hsh * 16777619) >>> 0; }
+        const rnd = () => { hsh ^= hsh << 13; hsh ^= hsh >>> 17; hsh ^= hsh << 5; hsh >>>= 0; return (hsh % 1000) / 1000; };
+        const x0 = u0 * E, x1 = u1 * E, y0 = (1 - v1) * E, y1 = (1 - v0) * E;
+        // cells sized to SURVIVE bloom fusion: a facade rect is ~32x31 canvas px
+        // (screen ~170x25px at mid-distance), so 4x5px cells render sub-2px on screen
+        // and fuse under the 0.28 bloom threshold (pm val14 diagnosis b). 8x10px
+        // cells with 6px gaps = 3x2 large discrete windows per facade — each ~4-5
+        // screen px, structured at the flood-calibration's own scale.
+        const cw = 8, ch = 10, gx = 6, gy = 6;
+        for (let y = y0 + gy; y < y1 - ch; y += ch + gy) {
+          for (let x = x0 + gx; x < x1 - cw; x += cw + gx) {
+            const r = rnd();
+            if (r < 0.12) continue;               // 88% of windows lit — the visible
+                                                  // facade band at grazing angles maps a
+                                                  // ~4px uv strip; sparse grids land the
+                                                  // strip in a gap (the near-facade blank
+                                                  // wall mechanism, uv-probed)
+            cx.fillStyle = r < 0.65 ? '#cfd8e8'   // cool interior
+                         : r < 0.85 ? '#ffd9a0'   // warm interior
+                         : '#ffe9c8';             // bright
+            // luminance must sit BELOW the 0.28 bloom threshold (~0.45 sRGB alpha
+            // on an 0.8 cell color = ~0.2 linear): lit-but-not-blooming windows —
+            // the cells themselves survive as structure instead of fusing into a
+            // bloom wall (the cells_white_test proof: white cells fuse completely).
+            cx.globalAlpha = 0.42 + rnd() * 0.08;
+            cx.fillRect(Math.round(x), Math.round(y), cw, ch);
+          }
+        }
+        cx.globalAlpha = 1;
+      });
+      // pm val14's working wedge: the flood uploaded a NEW Image (data-URL) and the
+      // wall rendered — the direct CanvasTexture path samples black in this bundle
+      // even with content on the canvas (CPU-side reads show the windows; the GPU
+      // gets black). Replicate the proven path exactly: data-URL Image texture.
+      winTex = new THREE.Texture(new Image());
+      winTex.flipY = true;          // windows written at (1-v) rows — pairs with flipY=true
+      winTex.colorSpace = THREE.SRGBColorSpace;
+      // data-URL Images decode ASYNC: needsUpdate set synchronously uploads the
+      // not-yet-decoded (empty) image on the first render frame and never re-uploads
+      // — the GPU samples black forever (the near-facade blank-wall mechanism, uv-
+      // probed: facade points sample the RIGHT cells CPU-side but render black).
+      // Upload on decode completion instead.
+      winTex.image.onload = () => { winTex.needsUpdate = true; };
+      winTex.image.src = cv.toDataURL();
+    }
     return Promise.all(Object.keys(groups).map((g) =>
       Promise.all([loadTex(groups[g].albedo, true), loadTex(groups[g].light, false)])
         .then(([a, l]) => {
@@ -79,6 +146,11 @@ window.S9 = window.S9 || {};
               aoMapIntensity: 1.15,
               roughness: 0.92, metalness: 0.0, // asphalt/concrete/carbon-statics class
             });
+            if (g === 'downtown' && winTex) {  // B1c: constructed WITH the emissive slot
+              m.emissiveMap = winTex;
+              m.emissive = new THREE.Color(0xffffff);
+              m.emissiveIntensity = window.__rigEmissive !== undefined ? window.__rigEmissive : 0;
+            }
           } else {
             m = S9.composeMaterial(a, l, GAIN[g] || 2.4, 0.12);
           }
@@ -108,61 +180,9 @@ window.S9 = window.S9 || {};
           swapped++;
         }
       });
-      // WS-B1c: procedural lit-window emissive for downtown blocks — the
-      // interim night-city content until modeler's WS-B2 emissive atlas lands
-      // (which slots into this same material.emissiveMap). One atlas-space
-      // canvas; each block's uv rect gets a seeded window grid, so the shared
-      // material samples each block's OWN windows through its uv rect.
-      if (lit && mats.downtown) {
-        const E = 1024;
-        const cv = document.createElement('canvas'); cv.width = E; cv.height = E;
-        const cx = cv.getContext('2d');
-        cx.fillStyle = '#000000'; cx.fillRect(0, 0, E, E);
-        let hsh = 2166136261;
-        staticRoot.traverse((o) => {
-          if (!o.isMesh || !o.name || !o.name.startsWith('downtown_block')) return;
-          const uv = o.geometry.attributes.uv;
-          if (!uv) return;
-          let u0 = 1, u1 = 0, v0 = 1, v1 = 0;
-          for (let i = 0; i < uv.count; i++) {
-            const u = uv.getX(i), v = uv.getY(i);
-            u0 = Math.min(u0, u); u1 = Math.max(u1, u);
-            v0 = Math.min(v0, v); v1 = Math.max(v1, v);
-          }
-          for (let i = 0; i < o.name.length; i++) { hsh ^= o.name.charCodeAt(i); hsh = (hsh * 16777619) >>> 0; }
-          const rnd = () => { hsh ^= hsh << 13; hsh ^= hsh >>> 17; hsh ^= hsh << 5; hsh >>>= 0; return (hsh % 1000) / 1000; };
-          // window grid inside the block's uv rect (v flipped: uv v0 = canvas bottom)
-          const x0 = u0 * E, x1 = u1 * E, y0 = (1 - v1) * E, y1 = (1 - v0) * E;
-          // density retune (02:40 wake): at 7x9 cells a 3%-of-atlas facade rect fits
-          // only ~2x2 windows — the canvas measured brightFrac 0.0014 ('empty') and
-          // facades showed 1-2 dots. Denser grid + stronger alpha so each facade
-          // carries a full lit-window grid (the B1c look target: warm clusters).
-          const cw = 4, ch = 5, gx = 3, gy = 3;
-          for (let y = y0 + gy; y < y1 - ch; y += ch + gy) {
-            for (let x = x0 + gx; x < x1 - cw; x += cw + gx) {
-              const r = rnd();
-              if (r < 0.45) continue;               // 55% of windows lit
-              cx.fillStyle = r < 0.65 ? '#cfd8e8'   // cool interior
-                           : r < 0.85 ? '#ffd9a0'   // warm interior
-                           : '#ffe9c8';             // bright
-              cx.globalAlpha = 0.6 + rnd() * 0.25;
-              cx.fillRect(Math.round(x), Math.round(y), cw, ch);
-            }
-          }
-          cx.globalAlpha = 1;
-        });
-        const tex = new THREE.CanvasTexture(cv);
-        tex.flipY = true;                           // CanvasTexture default; windows were
-                                                    // written at (1-v) canvas rows, which
-                                                    // pairs with flipY=true sampling
-        tex.colorSpace = THREE.SRGBColorSpace;
-        mats.downtown.emissiveMap = tex;
-        mats.downtown.emissive = new THREE.Color(0xffffff);
-        mats.downtown.emissiveIntensity = window.__rigEmissive !== undefined ? window.__rigEmissive : 0;
-        mats.downtown.needsUpdate = true;   // adding a map slot post-first-render
-                                            // requires a program rebuild — without
-                                            // this the emissiveMap is silently ignored
-      }
+      // WS-B1c window canvas now builds BEFORE the material factory (see top of
+      // applyBakedStatics): the downtown material is constructed with its emissiveMap
+      // set, which is the only assignment path that compiles USE_EMISSIVEMAP.
       return swapped;
     });
   };
