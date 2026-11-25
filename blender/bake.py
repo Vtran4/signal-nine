@@ -28,6 +28,19 @@ ENV_NAME = next((a.split("=", 1)[1] for a in argv if a.startswith("--env=")), No
 # (env_coast_goldenhour.jpg) — the certified daytime env_coast.jpg is never
 # touched. Set-pieces per Coder's rig slots (night waits on WS-B2 content).
 PANO_TIME = next((a.split("=", 1)[1] for a in argv if a.startswith("--pano-time=")), None)
+# WS-B3 golden-hour LIGHTMAP round (pm's fired branch, 2026-11-25): --warm
+# bakes each group's LIGHT pass under the graded golden-hour rig (qwantani
+# dome at reduced strength + a warm 2500K low sun) and writes SUFFIXED
+# atlases (light_<g>_golden.png) + a side-car manifest_golden.json. The
+# mode-side-effect contract: --warm must NOT touch the certified
+# light_<g>.png files, manifest.json, tracks.glb, the blend, or any UV
+# assignment (the statics are env-agnostic baked light; the golden-hour
+# set is a VARIANT the ?env= consumer selects, exactly like the env panos).
+WARM = "--warm" in argv
+WARM_HDRI = "qwantani_sunset_puresky_4k.hdr"   # the graded A/B dome (615dbe2)
+WARM_STRENGTH = 0.22                            # the A/B graded rig value
+WARM_SUN_RGB = (1.0, 0.62, 0.28)                # 2500K
+WARM_SUN_ENERGY = 1.8                           # the A/B lamp energy
 GROUPS = {"coastal": 2048, "downtown": 2048, "props": 1024, "canyon": 2048}
 TEST_RES_SCALE = {"coastal": 512, "downtown": 512, "props": 512, "canyon": 512}
 SAMPLES = {"--test": 64, "--full": 384}
@@ -87,13 +100,76 @@ def set_world_env(hdr_path):
     print("WORLD_ENV:", os.path.basename(hdr_path))
 
 
+def set_warm_rig():
+    """--warm golden-hour bake rig (the graded A/B values): qwantani dome at
+    reduced strength + every sun retinted 2500K and dropped low. Filmic is
+    NOT set here — bake passes write linear data; view transforms are a
+    render-camera concern only."""
+    env_path = os.path.join(ASSETS, "hdri", WARM_HDRI)
+    if not os.path.isfile(env_path):
+        raise RuntimeError("WARM_RIG_FAIL: missing %s" % env_path)
+    set_world_env(env_path)
+    nt = scene.world.node_tree
+    bg = nt.nodes.get("Background")
+    bg.inputs[1].default_value = WARM_STRENGTH
+    print("WARM_RIG: dome strength %.2f" % WARM_STRENGTH)
+    n_sun = 0
+    for o in scene.objects:
+        if o.type == "LIGHT" and o.data.type == "SUN":
+            o.data.color = WARM_SUN_RGB
+            o.data.energy = WARM_SUN_ENERGY
+            o.rotation_euler = (math.radians(78), 0.0, math.radians(250))
+            n_sun += 1
+    print("WARM_RIG: %d sun(s) retinted 2500K, low-angle" % n_sun)
+
+
+def bake_group_light_only(g, objs, res, samples, margin):
+    """--warm pass: the LIGHT bake ONLY, on the blend's EXISTING atlas UVs
+    (no uv_pass re-assignment — the certified rects stay authoritative),
+    saved as light_<g>_golden.png. No albedo pass (albedo is env-neutral
+    by contract)."""
+    import time
+    t0 = time.time()
+    light = fresh_image("light_" + g + "_golden", res, linear=True)
+    saved = {ob.name: [m for m in ob.data.materials if m] for ob in objs}
+    lo = white_override(g, light)
+    for ob in objs:
+        keep = light_material_for(saved[ob.name], g, light)
+        ob.data.materials.clear()
+        ob.data.materials.append(keep)
+    full = [o for o in objs if not (o.name.endswith("_lod1") or o.name.endswith("_lod2"))]
+    lods = [o for o in objs if o not in full]
+    for stage, hidden in ((full, lods), (lods, full)):
+        if not stage:
+            continue
+        for ob in hidden:
+            ob.hide_render = True
+        bpy.ops.object.select_all(action="DESELECT")
+        for ob in stage:
+            ob.select_set(True)
+        bpy.context.view_layer.objects.active = stage[0]
+        bpy.ops.object.bake(type="DIFFUSE", pass_filter={"DIRECT", "INDIRECT"},
+                            use_clear=False, margin=margin)
+        for ob in hidden:
+            ob.hide_render = False
+    lmean, lmax = image_stats(light)
+    mid_frac = light_gate(light)
+    for ob in objs:
+        ob.data.materials.clear()
+        for m in saved[ob.name]:
+            ob.data.materials.append(m)
+    ok_l = lmax > 0.0005
+    if ok_l:
+        save_png(light)
+    print("WARM_GROUP %s res=%d objs=%d time=%.1fs light mean=%.4f max=%.4f %s "
+          "ambient_mid=%.4f" % (g, res, len(objs), time.time() - t0, lmean,
+                                lmax, "VERIFY_OK" if ok_l else "VERIFY_FAIL",
+                                mid_frac))
+    return {"group": g, "light": "light_%s_golden.png" % g if ok_l else None,
+            "ambient_mid": round(mid_frac, 4)}
+
+
 def ensure_world_env():
-    """Verify the bake world actually CONTRIBUTES ambient before any bake
-    depends on it. Two silent-killers caught here: (1) an env image whose
-    pixels never loaded (background-mode lazy load), (2) an UNLINKED
-    Background — the Blender 5.3 sky-enum rename made build_track's world
-    link skip, baking on the default flat 0.05 grey. If the Background is
-    unlinked, wire the locked HDRI and verify; never bake on a dead world."""
     if scene.world is None:
         scene.world = bpy.data.worlds.new("bake_world")
         scene.world.use_nodes = True
@@ -605,7 +681,9 @@ if ENV_NAME:
     else:
         print("WORLD_ENV_MISSING:", env_path, "- keeping scene sky")
 ensure_world_env()
-if MODE != "--export-only":
+if WARM:
+    set_warm_rig()
+if MODE != "--export-only" and not WARM:
     add_fill_rig()
 groups = collect_groups()
 print("BAKE_MODE:", MODE, "groups:", {g: len(o) for g, o in groups.items()})
@@ -620,21 +698,31 @@ if MODE == "--export-only":
                                        "light": "light_%s.png" % g}
     bpy.ops.wm.save_mainfile()
     print("BLEND_SAVED (atlas UVs persisted)")
-elif MODE == "--pano-only":
-    # pano render ONLY — no bake_group passes, no UV re-assignment, no glb
-    # re-export (the env variant is the deliverable). The output file honors
-    # BOTH variant axes: --env= swaps the sky source, --pano-time= names the
-    # variant — an HDRI swap without --pano-time STILL writes a suffixed
-    # variant (f5b55a8's certified daytime env_coast.jpg must never be
-    # overwritten by a variant render — the 22:5x overwrite catch).
-    # MANIFEST PRESERVATION (coder's 436-8-0 regression, 2026-11-25): this
-    # branch never populates atlas_groups, and the tail-of-script write was
-    # emitting an EMPTY-atlas manifest.json — applyBakedStatics matched 0
-    # nodes and every baked static went dark. --pano-only must leave BOTH
-    # manifest files exactly as they are on disk.
-    render_pano()
-    print("MANIFEST_PRESERVED (--pano-only does not rewrite manifest.json)")
-    print("BAKE_DONE mode=--pano-only")
+elif MODE == "--pano-only" or WARM:
+    # Variant modes share one contract: the CERTIFIED artifacts
+    # (manifest.json, the daytime light_<g>.png set, tracks.glb, the blend)
+    # are never touched — variants are SUFFIXED side files + a side-car
+    # manifest. --pano-only renders the pano variant; --warm bakes the
+    # golden-hour LIGHT variant set on the existing atlas UVs.
+    if MODE == "--pano-only":
+        render_pano()
+        print("MANIFEST_PRESERVED (--pano-only does not rewrite manifest.json)")
+    else:
+        golden = {}
+        for g, objs in groups.items():
+            golden[g] = bake_group_light_only(g, objs, GROUPS[g],
+                                              SAMPLES["--full"], margin)
+        with open(os.path.join(ASSETS, "manifest_golden.json"), "w",
+                  encoding="utf-8") as fh:
+            import json
+            json.dump({"generated_by": "bake.py --warm",
+                       "pairs_with_env": "env_coast_goldenhour.jpg",
+                       "rig": {"hdri": WARM_HDRI, "strength": WARM_STRENGTH,
+                               "sun_rgb": list(WARM_SUN_RGB),
+                               "sun_energy": WARM_SUN_ENERGY},
+                       "atlas_groups": golden}, fh, indent=2)
+        print("MANIFEST_GOLDEN_OK (manifest.json untouched)")
+    print("BAKE_DONE mode=%s" % ("--pano-only" if MODE == "--pano-only" else "--warm"))
     raise SystemExit(0)
 else:
     for g, objs in groups.items():
