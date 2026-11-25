@@ -33,6 +33,10 @@
   "gt3_rim_fr",
   "gt3_rim_rl",
   "gt3_rim_rr",
+  "gt3_rimring_fl",
+  "gt3_rimring_fr",
+  "gt3_rimring_rl",
+  "gt3_rimring_rr",
   "gt3_roof",
   "gt3_splitter",
   "gt3_tail_panel",
@@ -47,7 +51,7 @@
   "gt3_wing_pylon_l",
   "gt3_wing_pylon_r"
  ],
- "tris": 5262,
+ "tris": 5886,
  "materials": [
   "caliper_red",
   "carbon_weave_gloss",

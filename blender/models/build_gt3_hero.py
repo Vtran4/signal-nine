@@ -227,13 +227,13 @@ def build_wheels():
             rf.append((k, k2, 14 + k2, 14 + k))
         rf.append(tuple(range(14)))
         rf.append(tuple(range(14, 28)))
-        # 10 paired spokes, thin (GT3 wheel read)
-        for s in range(5):
-            a = 2 * math.pi * s / 5 + 0.3
+        # 18 paired spokes, thin (WS-Q carside.png revision: multi-spoke read)
+        for s in range(9):
+            a = 2 * math.pi * s / 9 + 0.3
             base = len(rv)
             ca, sa = math.cos(a), math.sin(a)
             for sx in (-1, 1):
-                for sy in (-0.09, 0.09):
+                for sy in (-0.055, 0.055):
                     for sz in (rr2 * 0.30, rr2 * 0.85):
                         rv.append((sx * tw * 0.22, sy * ca - sz * sa, sy * sa + sz * ca))
             for f in [(0, 1, 3, 2), (4, 5, 7, 6), (0, 4, 5, 1),
@@ -241,6 +241,21 @@ def build_wheels():
                 rf.append(tuple(vi + base for vi in f))
         rim = mesh_from("gt3_rim_" + tag, rv, rf, MAT["rim_gunmetal"],
                         location=(x, f_axle, r))
+        # red rim-ring (WS-Q carside.png): thin red band at the rim barrel's
+        # outer edge, both faces — the livery tie-in meshed at last
+        ring_v, ring_f = [], []
+        for xs in (-tw * 0.29, tw * 0.29):
+            for k in range(28):
+                a = 2 * math.pi * k / 28
+                ring_v.append((xs, (R - 0.015) * math.sin(a),
+                               rr2 + (R - 0.015) * math.cos(a)))
+        for k in range(28):
+            k2 = (k + 1) % 28
+            ring_f.append((k, k2, 28 + k2, 28 + k))
+        ring_f.append(tuple(range(28)))
+        ring_f.append(tuple(range(28, 56)))
+        mesh_from("gt3_rimring_" + tag, ring_v, ring_f, MAT["caliper_red"],
+                  location=(x, f_axle, r))
         # hub cap: flush just behind the tire's outer face (was recessed ->
         # rendered as a black void), mid-gray
         hub_v, hub_f = [], []
@@ -248,18 +263,13 @@ def build_wheels():
             a = 2 * math.pi * k / 14
             hub_v.append((tw * 0.5 - 0.008, rr2 * math.sin(a), rr2 + rr2 * math.cos(a)))
         mesh_from("gt3_hub_" + tag, hub_v, [tuple(range(14))],
-                  pbr("gt3_hub_gray", (0.30, 0.30, 0.31), 0.0, 0.6),
-                  location=(x, f_axle, r))
+          pbr("gt3_hub_gray", (0.30, 0.30, 0.31), 0.0, 0.6),
+          location=(x, f_axle, r))
         # red caliper block behind the spokes
         mesh_from("gt3_caliper_" + tag, [
-            (-tw * 0.10, -0.16, 0.14), (tw * 0.10, -0.16, 0.14),
-            (tw * 0.10, 0.10, 0.20), (-tw * 0.10, 0.10, 0.20)],
-            [(0, 1, 2, 3)], MAT["caliper_red"], location=(x, f_axle, r))
-        # red rim pinstripe ring (livery tie-in)
-        ring_v, ring_f = [], []
-        for k in range(24):
-            a = 2 * math.pi * k / 24
-            ring_v.append((tw * 0.30, (R - 0.01) * math.sin(a), R - 0.01 + (R - 0.01) * math.cos(a) - rr2 + 0.02))
+                (-tw * 0.10, -0.16, 0.14), (tw * 0.10, -0.16, 0.14),
+                (tw * 0.10, 0.10, 0.20), (-tw * 0.10, 0.10, 0.20)],
+                [(0, 1, 2, 3)], MAT["caliper_red"], location=(x, f_axle, r))
         out.append((wheel, rim))
     return out
 
@@ -293,8 +303,8 @@ def build_body():
         t01 = (f - f_cap0) / max(1e-9, f_cap1 - f_cap0)
         cap_top = 1.14 - (1.14 - top) * (t01 ** 0.85)
         cap_rings.append([(px, py, belt + (0.45 + 0.55 * uf) * (cap_top - belt))
-                          for px, py, uf, *_ in
-                          [(p[0], p[1], (p[2] - belt) / max(1e-9, top - belt)) for p in ring]])
+                  for px, py, uf, *_ in
+                  [(p[0], p[1], (p[2] - belt) / max(1e-9, top - belt)) for p in ring]])
     roof = loft("gt3_roof", cap_rings, MAT["paint_gt3"], smooth=True)
     # inner arch liners: closed dark cylinders INSIDE the body (two-sided
     # barrel + end caps, clipped to the arch zone so nothing pokes below the
@@ -308,15 +318,15 @@ def build_body():
         wv, wf = [], []
         seg = 16
         for xf in (x - 0.13, x + 0.13):
-            for j in range(seg):
-                a = math.pi * j / (seg - 1)   # half-circle arch (z0..z1)
-                wv.append((xf, ax + rr_w * math.cos(a), z0 + (z1 - z0) * math.sin(a)))
+                    for j in range(seg):
+                        a = math.pi * j / (seg - 1)   # half-circle arch (z0..z1)
+                        wv.append((xf, ax + rr_w * math.cos(a), z0 + (z1 - z0) * math.sin(a)))
         wf.append(tuple(range(seg)))                     # cap -x
         wf.append(tuple(range(seg, 2 * seg)))            # cap +x
         for j in range(seg - 1):                         # barrel wall
             wf.append((j, j + 1, seg + j + 1, seg + j))
         mesh_from("gt3_archliner_" + tag, wv, wf,
-                  pbr("gt3_well_black", (0.012, 0.012, 0.014), 0.0, 0.95))
+          pbr("gt3_well_black", (0.012, 0.012, 0.014), 0.0, 0.95))
     return body, glass, roof
 
 
@@ -350,12 +360,12 @@ def build_wing():
     # plane's top (4-point profile so the neck reads, not a stick)
     for side, tag in ((-0.30, "l"), (0.30, "r")):
         pts = [(side - 0.09, 1.46, 0.775), (side - 0.09, 1.66, 0.94),
-                       (side - 0.09, 1.84, plane_z + 0.06),
-                       (side - 0.09, 1.92, plane_z + 0.012),
-                       (side + 0.09, 1.46, 0.775),
-                       (side + 0.09, 1.66, 0.94),
-                       (side + 0.09, 1.84, plane_z + 0.06),
-                       (side + 0.09, 1.92, plane_z + 0.012)]
+               (side - 0.09, 1.84, plane_z + 0.06),
+               (side - 0.09, 1.92, plane_z + 0.012),
+               (side + 0.09, 1.46, 0.775),
+               (side + 0.09, 1.66, 0.94),
+               (side + 0.09, 1.84, plane_z + 0.06),
+               (side + 0.09, 1.92, plane_z + 0.012)]
         verts2, faces2 = [], []
         verts2.extend(pts)
         n2 = 4
@@ -364,7 +374,7 @@ def build_wing():
         faces2.append((0, n2 - 1, 2 * n2 - 1, n2))
         faces2.append(tuple(range(n2, 2 * n2)))
         py_ = mesh_from("gt3_wing_pylon_" + tag, verts2, faces2,
-                        MAT["carbon_weave_gloss"])
+                MAT["carbon_weave_gloss"])
         parts.append(py_)
     # endplates: red swept slabs at the plane tips — tapered bottom-rear
     # (the plain rectangle read as a floating plaque in clay renders)
@@ -372,8 +382,8 @@ def build_wing():
         x0 = side - (0.012 if side < 0 else -0.012)
         x1 = x0 + 0.024
         prof = [(cy - 0.16, plane_z - 0.10), (cy + 0.06, plane_z - 0.13),
-                (cy + 0.22, plane_z - 0.05), (cy + 0.22, plane_z + 0.06),
-                (cy + 0.02, plane_z + 0.11), (cy - 0.16, plane_z + 0.12)]
+        (cy + 0.22, plane_z - 0.05), (cy + 0.22, plane_z + 0.06),
+        (cy + 0.02, plane_z + 0.11), (cy - 0.16, plane_z + 0.12)]
         v10 = [(x0, py, pz) for py, pz in prof] + \
               [(x1, py, pz) for py, pz in prof]
         np_ = len(prof)
@@ -381,7 +391,7 @@ def build_wing():
         fes.append(tuple(range(np_)))                       # front cap ngon
         fes.append(tuple(range(np_, 2 * np_)))              # rear cap ngon
         ep = mesh_from("gt3_wing_endplate_" + tag, v10, fes,
-                       pbr("gt3_endplate_red", (0.55, 0.03, 0.03), 0.0, 0.35))
+               pbr("gt3_endplate_red", (0.55, 0.03, 0.03), 0.0, 0.35))
         parts.append(ep)
     return parts
 
@@ -451,7 +461,7 @@ def build_tail():
             ring_f.append(tuple(range(seg)))
             ring_f.append(tuple(range(seg, 2 * seg)))
             parts.append(mesh_from("gt3_lights_r_tailring_%d%d" % (1 if side < 0 else 2, k + 1),
-                                   ring_v, ring_f, MAT["lights_r"]))
+                           ring_v, ring_f, MAT["lights_r"]))
     # center rain light: vertical red strip on the crash structure
     parts.append(mesh_from("gt3_lights_r_rainlight", [
         (-0.025, 2.289, 0.50), (0.025, 2.289, 0.50), (0.025, 2.289, 0.34),
@@ -482,9 +492,9 @@ def build_lights_f():
     parts = []
     for side in (-1, 1):
         verts = [(side * 0.52, -2.16, 0.52), (side * 0.78, -2.06, 0.56),
-                 (side * 0.86, -1.94, 0.54), (side * 0.60, -2.02, 0.46)]
+         (side * 0.86, -1.94, 0.54), (side * 0.60, -2.02, 0.46)]
         parts.append(mesh_from("gt3_lights_f_%d" % (1 if side < 0 else 2),
-                               verts, [(0, 1, 2, 3)], MAT["lights_f"]))
+                       verts, [(0, 1, 2, 3)], MAT["lights_f"]))
     return parts
 
 
@@ -524,8 +534,8 @@ def export_glb():
         ob.select_set(True)
     bpy.context.view_layer.objects.active = sel[0]
     bpy.ops.export_scene.gltf(filepath=out, export_format="GLB",
-                              export_apply=True, export_yup=True,
-                              use_selection=True)
+                      export_apply=True, export_yup=True,
+                      use_selection=True)
     mats = sorted({s.name for ob in sel for s in ob.data.materials if s})
     report = {"file": "gt3.glb", "nodes": [o.name for o in sel],
               "tris": sum(tri_count(o) for o in sel), "materials": mats,
@@ -558,9 +568,9 @@ lights_f = build_lights_f()
 # scene walk (not the manual build list): catches hub caps, calipers and
 # arch liners meshed inside the part builders — no part silently uncounted
 all_obs = sorted([ob for ob in bpy.data.objects
-                  if ob.type == "MESH" and ob.name.startswith("gt3_")
-                  and ob.name != "gt3_ground"],
-                 key=lambda o: o.name)
+          if ob.type == "MESH" and ob.name.startswith("gt3_")
+          and ob.name != "gt3_ground"],
+         key=lambda o: o.name)
 total = sum(tri_count(o) for o in all_obs)
 print("GT3_TRIS", json.dumps({"total": total,
       "per_part": {o.name: tri_count(o) for o in all_obs if tri_count(o) > 0}}))
