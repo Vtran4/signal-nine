@@ -558,9 +558,18 @@ window.S9 = window.S9 || {};
         }
         look = p.clone();
       } else { // chase — pull-back with speed
+        // P1 camera-spin fix (Victor playtest): the chase rig rode the car's HEADING,
+        // so a drift swung the whole view around with the sliding nose and spun for
+        // seconds until the car straightened. Blend the reference toward the TRACK
+        // TANGENT as slip grows: the camera stays behind the road, the car rotates
+        // inside the frame (Burnout drift framing).
+        const tangentYaw = this.track.tangentYawAt(car.s);
+        const tangent = new THREE.Vector3(Math.sin(tangentYaw), 0, Math.cos(tangentYaw));
+        const slipK = clamp(Math.abs(car.slip) / 0.5, 0, 1) * 0.85;
+        const ref = fwd.clone().lerp(tangent, slipK).normalize();
         const dist = C.chaseDist + speedNorm * C.chaseDistSpeed;
-        camPos = p.clone().add(fwd.clone().multiplyScalar(-dist)).add(new THREE.Vector3(0, C.chaseHeight, 0));
-        look = p.clone().add(fwd.clone().multiplyScalar(C.lookAhead)).add(new THREE.Vector3(0, 0.8, 0));
+        camPos = p.clone().add(ref.clone().multiplyScalar(-dist)).add(new THREE.Vector3(0, C.chaseHeight, 0));
+        look = p.clone().add(ref.clone().multiplyScalar(C.lookAhead)).add(new THREE.Vector3(0, 0.8, 0));
         if (speedNorm > 0.6) {
           const sh = C.shake * (speedNorm - 0.6) * 3;
           camPos.x += (Math.random() - 0.5) * sh; camPos.y += (Math.random() - 0.5) * sh;
