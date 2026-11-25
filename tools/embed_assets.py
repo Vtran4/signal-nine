@@ -92,9 +92,18 @@ def main():
     # (file:// has no fetch — the gt3 livery JSON is consumer-critical, and a
     # relative fetch on file:// is the crossOrigin failure class that cost us
     # the white-texture round; pm-s9 ruling: consumer + embed land together)
-    for extra in ("tracks_data.json", "env_coast.jpg", "gt3_liveries.json",
-                  "alb_gt3.png", "ao_gt3.png", "nightkit_emissive.png",
-                  "env_coast_goldenhour.jpg"):
+    base_extras = ("tracks_data.json", "env_coast.jpg", "gt3_liveries.json",
+                   "alb_gt3.png", "ao_gt3.png", "nightkit_emissive.png",
+                   "env_coast_goldenhour.jpg", "manifest_golden.json")
+    names.extend(e for e in base_extras if os.path.exists(os.path.join(ASSETS, e)))
+    # golden light set: embed the CONVERTED jpgs when they exist (pm's option-1 ruling:
+    # PNG masters stay on disk untracked, the ceiling governs embedded assets). Until
+    # modeler's conversion lands, the golden slot serves the pngs loose on localhost
+    # (file:// golden-hour falls back to certified lights until the convert lands).
+    for pat in ("light_*_golden.jpg",):
+        for p in glob.glob(os.path.join(ASSETS, pat)):
+            names.append(os.path.basename(p))
+    for extra in ():
         if os.path.exists(os.path.join(ASSETS, extra)):
             names.append(extra)
 

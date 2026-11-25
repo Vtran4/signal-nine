@@ -183,6 +183,25 @@ window.S9 = window.S9 || {};
       track.oncomingEdge = track.laneDodge + 0.3;
       // baked atlases: unlit compose materials per manifest node lists
       // (?lit=1 flips to the Phase 2.0 lit PBR + AO-overlay path)
+      // Golden-hour light pairing (Victor's pick): ?env=goldenhour swaps each group's
+      // LIGHT atlas to the warm-baked set via manifest_golden.json (bundle-embedded).
+      // Extension-agnostic off the manifest: the loader resolves whatever filename the
+      // golden manifest states (png masters / modeler's jpg converts) bundle-first.
+      if (manifest && new URLSearchParams(location.search).get('env') === 'goldenhour'
+          && window.__S9_ASSETS && window.__S9_ASSETS['manifest_golden.json']) {
+        window.__certifiedLights = {};
+        for (const g in manifest.atlas_groups || {})
+          window.__certifiedLights[g] = manifest.atlas_groups[g].light;
+        try {
+          const gj = JSON.parse(atob(window.__S9_ASSETS['manifest_golden.json'].split(',')[1] || '')
+            .split('').map(c => String.fromCharCode(c.charCodeAt(0))).join(''));
+          for (const g in gj.atlas_groups || {}) {
+            if (manifest.atlas_groups[g] && gj.atlas_groups[g].light)
+              manifest.atlas_groups[g].light = gj.atlas_groups[g].light;
+          }
+          window.__lightSet = 'golden';
+        } catch (e) { window.__errors.push({ m: 'golden manifest: ' + (e && e.message || e), s: 'main.js', l: 0, c: 0, st: '' }); }
+      }
       if (manifest) {
         S9.applyBakedStatics(tracksGltf.scene, manifest, makeTexLoader(), !!P.lit)
           .then((n) => {

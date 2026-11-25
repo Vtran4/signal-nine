@@ -81,7 +81,13 @@ window.S9 = window.S9 || {};
       winTex.image.src = window.__S9_ASSETS['nightkit_emissive.png'];
     }
     return Promise.all(Object.keys(groups).map((g) =>
-      Promise.all([loadTex(groups[g].albedo, true), loadTex(groups[g].light, false)])
+      Promise.all([
+        loadTex(groups[g].albedo, true),
+        // golden-set guard: a missing golden light (file:// before the converts land
+        // in the bundle) falls back to the certified light instead of rejecting the
+        // whole group
+        loadTex(groups[g].light, false).catch(() => loadTex(window.__certifiedLights?.[g] || groups[g].light, false))
+      ])
         .then(([a, l]) => {
           let m;
           lightTex[g] = l;
