@@ -627,9 +627,15 @@ elif MODE == "--pano-only":
     # variant — an HDRI swap without --pano-time STILL writes a suffixed
     # variant (f5b55a8's certified daytime env_coast.jpg must never be
     # overwritten by a variant render — the 22:5x overwrite catch).
+    # MANIFEST PRESERVATION (coder's 436-8-0 regression, 2026-11-25): this
+    # branch never populates atlas_groups, and the tail-of-script write was
+    # emitting an EMPTY-atlas manifest.json — applyBakedStatics matched 0
+    # nodes and every baked static went dark. --pano-only must leave BOTH
+    # manifest files exactly as they are on disk.
     render_pano()
-    manifest["mode_note"] = "--pano-only: env variant only, atlases untouched"
+    print("MANIFEST_PRESERVED (--pano-only does not rewrite manifest.json)")
     print("BAKE_DONE mode=--pano-only")
+    raise SystemExit(0)
 else:
     for g, objs in groups.items():
         res = GROUPS[g] if MODE == "--full" else TEST_RES_SCALE[g]
