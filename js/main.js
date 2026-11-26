@@ -59,7 +59,10 @@ window.S9 = window.S9 || {};
   async function loadEnv() {
     // Victor's golden-hour pick (routed via pm-s9): ?env=goldenhour swaps the pano/
     // IBL to the graded candidate; default stays the certified daytime pano.
+    // ?env=night pairs with the downtown night rig: returns null env — the procedural
+    // dome + dark background IS the night content (a pano would fight the rig).
     const envParam = new URLSearchParams(location.search).get('env');
+    if (envParam === 'night') return null;
     const envName = envParam === 'goldenhour' ? 'env_coast_goldenhour.jpg' : 'env_coast.jpg';
     const A = window.__S9_ASSETS;
     const src = (A && A[envName]) ? A[envName] : 'assets/' + envName;
