@@ -82,10 +82,9 @@ window.S9 = window.S9 || {};
     }
     return Promise.all(Object.keys(groups).map((g) =>
       Promise.all([
-        loadTex(groups[g].albedo, true),
-        // golden-set guard: a missing golden light (file:// before the converts land
-        // in the bundle) falls back to the certified light instead of rejecting the
-        // whole group
+        // golden-set guard covers both maps: a missing golden albedo/light (file://
+        // before the converts land in the bundle) falls back to the certified map
+        loadTex(groups[g].albedo, true).catch(() => loadTex(window.__certifiedAlbedos?.[g] || groups[g].albedo, true)),
         loadTex(groups[g].light, false).catch(() => loadTex(window.__certifiedLights?.[g] || groups[g].light, false))
       ])
         .then(([a, l]) => {

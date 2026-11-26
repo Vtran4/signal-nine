@@ -96,11 +96,11 @@ def main():
                    "alb_gt3.png", "ao_gt3.png", "nightkit_emissive.png",
                    "env_coast_goldenhour.jpg", "manifest_golden.json")
     names.extend(e for e in base_extras if os.path.exists(os.path.join(ASSETS, e)))
-    # golden light set: embed the CONVERTED jpgs when they exist (pm's option-1 ruling:
-    # PNG masters stay on disk untracked, the ceiling governs embedded assets). Until
-    # modeler's conversion lands, the golden slot serves the pngs loose on localhost
-    # (file:// golden-hour falls back to certified lights until the convert lands).
-    for pat in ("light_*_golden.jpg",):
+    # golden light + albedo set: embed the CONVERTED jpgs when they exist (pm's
+    # option-1 ruling: PNG masters stay on disk untracked, the ceiling governs embedded
+    # assets). The albedo overlay is the warm-grade surface fix (pm's re-look: cool
+    # daytime albedo cancels the warm baked light on road/ocean).
+    for pat in ("light_*_golden.jpg", "albedo_*_golden.jpg"):
         for p in glob.glob(os.path.join(ASSETS, pat)):
             names.append(os.path.basename(p))
     for extra in ():

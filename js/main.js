@@ -190,14 +190,22 @@ window.S9 = window.S9 || {};
       if (manifest && new URLSearchParams(location.search).get('env') === 'goldenhour'
           && window.__S9_ASSETS && window.__S9_ASSETS['manifest_golden.json']) {
         window.__certifiedLights = {};
-        for (const g in manifest.atlas_groups || {})
+        window.__certifiedAlbedos = {};
+        for (const g in manifest.atlas_groups || {}) {
           window.__certifiedLights[g] = manifest.atlas_groups[g].light;
+          window.__certifiedAlbedos[g] = manifest.atlas_groups[g].albedo;
+        }
         try {
           const gj = JSON.parse(atob(window.__S9_ASSETS['manifest_golden.json'].split(',')[1] || '')
             .split('').map(c => String.fromCharCode(c.charCodeAt(0))).join(''));
           for (const g in gj.atlas_groups || {}) {
             if (manifest.atlas_groups[g] && gj.atlas_groups[g].light)
               manifest.atlas_groups[g].light = gj.atlas_groups[g].light;
+            // round-2 warm grade: the golden ALBEDO rides the same overlay (cool
+            // daytime albedo cancels the warm baked light on road/ocean — pm's
+            // re-look diagnosis; modeler's manifest carries both keys)
+            if (manifest.atlas_groups[g] && gj.atlas_groups[g].albedo)
+              manifest.atlas_groups[g].albedo = gj.atlas_groups[g].albedo;
           }
           window.__lightSet = 'golden';
         } catch (e) { window.__errors.push({ m: 'golden manifest: ' + (e && e.message || e), s: 'main.js', l: 0, c: 0, st: '' }); }
