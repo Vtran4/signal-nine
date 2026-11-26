@@ -433,6 +433,98 @@ def build_civ(tok, spec):
     for p in parts:
         if p is not body:
             p.parent = body
+    # ---------------- WS-E LOD twins (approved scope: LOD2 ~400 tris) ----
+    # track.js pairs ANY <base>_lod1/_lod2 name suffixes into distance
+    # groups (base <160m, lod1 <420m, lod2 beyond) — part-level twins ride
+    # the existing mechanism with zero client edits. Detach parts
+    # (bumper_f/r, hood, bedpanel) stay LOD0-only: they eject on crash,
+    # which happens inside LOD0 range. Spin contract: LOD wheel twins
+    # carry wheel_ so they ride the spin traversal.
+    def lod_wheel(name, lod):
+        r, twd = spec["wheel_r"], spec["tire_w"]
+        SU = 12 if lod == 1 else 6
+        half = twd / 2
+        v, f = [], []
+        for xs in (-half, half):
+            for i in range(SU):
+                a = 2 * math.pi * i / SU
+                v.append((xs, r * math.sin(a), r * math.cos(a)))
+        for i in range(SU):
+            i2 = (i + 1) % SU
+            f.append((i, i2, SU + i2, SU + i))
+        f.append(tuple(range(SU)))
+        f.append(tuple(range(SU, 2 * SU)))
+        return mesh_from(name, v, f, MAT["tire"],
+                         location=(-spec["track_half"], spec["axles"][0], r))
+
+    def lod_body_rings(k, n_st):
+        upper, lower = split_profile(spec["profile"])
+        f0, f1 = upper[0][0], upper[-1][0]
+        eps = 0.008 * (f1 - f0)
+        ring = CIV_RING if k == 0 else densify(CIV_RING, k)
+        rings = []
+        for i in range(n_st):
+            f = f0 + eps + (f1 - f0 - 2 * eps) * i / (n_st - 1)
+            cz = spec["wheel_r"]
+            ra = spec["wheel_r"] + 0.09
+            fl = _interp(lower, f)
+            for ax in spec["axles"]:
+                df = f - ax
+                if abs(df) < ra:
+                    fl = max(fl, cz + math.sqrt(ra ** 2 - df ** 2))
+            belt = _interp(upper, f)
+            fl = min(fl, belt - 0.04)
+            W = spec["width"]
+            taper = 1.0 - 0.16 * max(gauss(f - upper[0][0], 0.55),
+                                     gauss(f - upper[-1][0], 0.55))
+            tuck = 0.10 * max(gauss(f - spec["axles"][0], 0.22),
+                              gauss(f - spec["axles"][-1], 0.22))
+            w_eff = W / 2 * taper * (1.0 - tuck)
+            rings.append([(lf * w_eff, f, fl + uf * (belt - fl))
+                          for lf, uf in ring])
+        return rings
+
+    def loft_rings(name, rings, mat):
+        n = len(rings[0])
+        verts = [v for ring in rings for v in ring]
+        faces = []
+        for i in range(len(rings) - 1):
+            for j in range(n):
+                j2 = (j + 1) % n
+                faces.append((i * n + j, i * n + j2,
+                              (i + 1) * n + j2, (i + 1) * n + j))
+        faces.append(tuple(range(n - 1, -1, -1)))
+        base = (len(rings) - 1) * n
+        faces.append(tuple(range(base, base + n)))
+        return mesh_from(name, verts, faces, mat)
+
+    if "cab" not in spec:
+        # LOD1 body: 13-pt ring, 15 stations (~40% of LOD0 body tris)
+        loft_rings(tok + "_body_lod1", lod_body_rings(0, 15),
+                   MAT["paint_traffic"]).parent = body
+        # LOD2 body: 7-pt ring, 8 stations (~12%)
+        loft_rings(tok + "_body_lod2", lod_body_rings(0, 8),
+                   MAT["paint_traffic"]).parent = body
+        # canopy twins
+        up = spec["canopy"]
+        gw = spec["width"] * spec["canopy_w"] / 2.0
+        for lod, n_st in ((1, 6), (2, 4)):
+            rings = []
+            for i in range(n_st):
+                f = up[0][0] + (up[-1][0] - up[0][0]) * i / (n_st - 1)
+                b = _interp(split_profile(spec["profile"])[0], f)
+                t = _interp(up, f)
+                rings.append([(lf * gw, f, b + uf * max(0.05, t - b))
+                              for lf, uf in CANOPY_RING])
+            loft_rings(tok + "_glass_lod" + str(lod), rings,
+                       MAT["glass"]).parent = body
+    # wheel twins (all axles)
+    for key, axle in zip(keys, axles):
+        x = -spec["track_half"] if key.startswith(("fl", "rl")) else spec["track_half"]
+        for lod in (1, 2):
+            wtw = lod_wheel(tok + "_wheel_" + key + ("_lod%d" % lod), lod)
+            wtw.location = (x, axle, spec["wheel_r"])
+            wtw.parent = body
     return body
 
 offsets = {"sedan": -14.0, "hatch": -7.0, "pickup": 0.0,

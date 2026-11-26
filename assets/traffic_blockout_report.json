@@ -14,7 +14,7 @@
   "vehicles": [
     {
       "type": "civ_sedan",
-      "tri_count": 2080,
+      "tri_count": 2930,
       "dims": {
         "length": 4.8,
         "width": 1.85,
@@ -30,10 +30,14 @@
       "nodes": [
         "sedan_antenna",
         "sedan_body",
+        "sedan_body_lod1",
+        "sedan_body_lod2",
         "sedan_bumper_f",
         "sedan_bumper_r",
         "sedan_exhaust",
         "sedan_glass",
+        "sedan_glass_lod1",
+        "sedan_glass_lod2",
         "sedan_hood",
         "sedan_lights_f",
         "sedan_lights_r",
@@ -42,12 +46,16 @@
         "sedan_mirror_stalk_l",
         "sedan_mirror_stalk_r",
         "sedan_wheel_fl",
-        "sedan_wheel_fr"
+        "sedan_wheel_fl_lod1",
+        "sedan_wheel_fl_lod2",
+        "sedan_wheel_fr",
+        "sedan_wheel_fr_lod1",
+        "sedan_wheel_fr_lod2"
       ]
     },
     {
       "type": "civ_hatch",
-      "tri_count": 2080,
+      "tri_count": 2930,
       "dims": {
         "length": 4.1,
         "width": 1.75,
@@ -62,10 +70,14 @@
       "wheel_radius": 0.31,
       "nodes": [
         "hatch_body",
+        "hatch_body_lod1",
+        "hatch_body_lod2",
         "hatch_bumper_f",
         "hatch_bumper_r",
         "hatch_exhaust",
         "hatch_glass",
+        "hatch_glass_lod1",
+        "hatch_glass_lod2",
         "hatch_hood",
         "hatch_lights_f",
         "hatch_lights_r",
@@ -75,12 +87,16 @@
         "hatch_mirror_stalk_r",
         "hatch_spoiler",
         "hatch_wheel_fl",
-        "hatch_wheel_fr"
+        "hatch_wheel_fl_lod1",
+        "hatch_wheel_fl_lod2",
+        "hatch_wheel_fr",
+        "hatch_wheel_fr_lod1",
+        "hatch_wheel_fr_lod2"
       ]
     },
     {
       "type": "civ_pickup",
-      "tri_count": 2116,
+      "tri_count": 2966,
       "dims": {
         "length": 5.4,
         "width": 1.95,
@@ -99,10 +115,14 @@
         "pickup_bedload_2",
         "pickup_bedpanel",
         "pickup_body",
+        "pickup_body_lod1",
+        "pickup_body_lod2",
         "pickup_bumper_f",
         "pickup_bumper_r",
         "pickup_exhaust",
         "pickup_glass",
+        "pickup_glass_lod1",
+        "pickup_glass_lod2",
         "pickup_hood",
         "pickup_lights_f",
         "pickup_lights_r",
@@ -111,12 +131,16 @@
         "pickup_mirror_stalk_l",
         "pickup_mirror_stalk_r",
         "pickup_wheel_fl",
-        "pickup_wheel_fr"
+        "pickup_wheel_fl_lod1",
+        "pickup_wheel_fl_lod2",
+        "pickup_wheel_fr",
+        "pickup_wheel_fr_lod1",
+        "pickup_wheel_fr_lod2"
       ]
     },
     {
       "type": "civ_boxvan",
-      "tri_count": 2140,
+      "tri_count": 2990,
       "dims": {
         "length": 5.8,
         "width": 2.05,
@@ -131,10 +155,14 @@
       "wheel_radius": 0.38,
       "nodes": [
         "boxvan_body",
+        "boxvan_body_lod1",
+        "boxvan_body_lod2",
         "boxvan_bumper_f",
         "boxvan_bumper_r",
         "boxvan_exhaust",
         "boxvan_glass",
+        "boxvan_glass_lod1",
+        "boxvan_glass_lod2",
         "boxvan_hood",
         "boxvan_lights_f",
         "boxvan_lights_r",
@@ -149,12 +177,16 @@
         "boxvan_rack_rail_l",
         "boxvan_rack_rail_r",
         "boxvan_wheel_fl",
-        "boxvan_wheel_fr"
+        "boxvan_wheel_fl_lod1",
+        "boxvan_wheel_fl_lod2",
+        "boxvan_wheel_fr",
+        "boxvan_wheel_fr_lod1",
+        "boxvan_wheel_fr_lod2"
       ]
     },
     {
       "type": "civ_bus",
-      "tri_count": 2080,
+      "tri_count": 2930,
       "dims": {
         "length": 11.0,
         "width": 2.5,
@@ -170,10 +202,14 @@
       "nodes": [
         "bus_acpod",
         "bus_body",
+        "bus_body_lod1",
+        "bus_body_lod2",
         "bus_bumper_f",
         "bus_bumper_r",
         "bus_exhaust",
         "bus_glass",
+        "bus_glass_lod1",
+        "bus_glass_lod2",
         "bus_grille",
         "bus_lights_f",
         "bus_lights_r",
@@ -182,12 +218,16 @@
         "bus_mirror_stalk_l",
         "bus_mirror_stalk_r",
         "bus_wheel_fl",
-        "bus_wheel_fr"
+        "bus_wheel_fl_lod1",
+        "bus_wheel_fl_lod2",
+        "bus_wheel_fr",
+        "bus_wheel_fr_lod1",
+        "bus_wheel_fr_lod2"
       ]
     },
     {
       "type": "civ_semi",
-      "tri_count": 2392,
+      "tri_count": 2584,
       "dims": {
         "length": 16.0,
         "width": 2.45,
@@ -230,8 +270,14 @@
         "semi_trailer",
         "semi_underride_r",
         "semi_wheel_fl",
+        "semi_wheel_fl_lod1",
+        "semi_wheel_fl_lod2",
         "semi_wheel_fr",
-        "semi_wheel_rl"
+        "semi_wheel_fr_lod1",
+        "semi_wheel_fr_lod2",
+        "semi_wheel_rl",
+        "semi_wheel_rl_lod1",
+        "semi_wheel_rl_lod2"
       ]
     }
   ]
