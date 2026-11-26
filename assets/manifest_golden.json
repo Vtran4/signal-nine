@@ -3,7 +3,7 @@
   "pairs_with_env": "env_coast_goldenhour.jpg",
   "rig": {
     "hdri": "qwantani_sunset_puresky_4k.hdr",
-    "strength": 0.22,
+    "strength": 0.3,
     "sun_rgb": [
       1.0,
       0.62,
@@ -14,24 +14,28 @@
   "atlas_groups": {
     "coastal": {
       "group": "coastal",
+      "albedo": "albedo_coastal_golden.jpg",
       "light": "light_coastal_golden.jpg",
-      "ambient_mid": 0.9879
+      "ambient_mid": 0.9783
     },
     "props": {
       "group": "props",
+      "albedo": "albedo_props_golden.jpg",
       "light": "light_props_golden.jpg",
-      "ambient_mid": 0.9172
+      "ambient_mid": 0.8455
     },
     "downtown": {
       "group": "downtown",
+      "albedo": "albedo_downtown_golden.jpg",
       "light": "light_downtown_golden.jpg",
-      "ambient_mid": 0.9916
+      "ambient_mid": 0.986
     },
     "canyon": {
       "group": "canyon",
+      "albedo": "albedo_canyon_golden.jpg",
       "light": "light_canyon_golden.jpg",
-      "ambient_mid": 0.9546
+      "ambient_mid": 0.9122
     }
   },
-  "encoding": "jpg q90 (linear light data); PNG masters kept on disk (ceiling exempts non-embedded masters) per the 15:40 ruling"
+  "encoding": "jpg q90 (linear light / sRGB albedo); PNG masters kept on disk (ceiling exempts non-embedded masters) per the 15:40 ruling"
 }

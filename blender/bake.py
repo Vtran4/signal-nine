@@ -41,6 +41,16 @@ WARM_HDRI = "qwantani_sunset_puresky_4k.hdr"   # the graded A/B dome (615dbe2)
 WARM_STRENGTH = 0.22                            # the A/B graded rig value
 WARM_SUN_RGB = (1.0, 0.62, 0.28)                # 2500K
 WARM_SUN_ENERGY = 1.8                           # the A/B lamp energy
+# pm's re-look diagnosis (cool albedo cancels warm light in the compose
+# multiply): the golden ALBEDO variant warm-tints the road/ocean base
+# colors via a temporary per-material multiply — the certified daytime
+# albedo stays untouched (the azure ocean is its signature).
+WARM_ALBEDO_TINT = {
+    # material-name prefix -> (r, g, b) multiply on the baked base color
+    "road": (1.12, 1.02, 0.86),   # cool grey asphalt -> warm taupe
+    "ocean": (1.35, 1.05, 0.72),  # steel-blue azure -> sunset teal-gold
+}
+WARM_STRENGTH = 0.30                            # ambient floor lift (was 0.22)
 GROUPS = {"coastal": 2048, "downtown": 2048, "props": 1024, "canyon": 2048}
 TEST_RES_SCALE = {"coastal": 512, "downtown": 512, "props": 512, "canyon": 512}
 SAMPLES = {"--test": 64, "--full": 384}
@@ -123,13 +133,76 @@ def set_warm_rig():
     print("WARM_RIG: %d sun(s) retinted 2500K, low-angle" % n_sun)
 
 
+def _tint_mult_node(mat, fac):
+    """Wire a temporary MULTIPLY node between the material's base-color
+    source and the BSDF (saved link restored by the caller)."""
+    nt = mat.node_tree
+    b = nt.nodes.get("Principled BSDF")
+    bc = b.inputs["Base Color"]
+    src = bc.links[0].from_socket if bc.is_linked else None
+    mult = nt.nodes.new("ShaderNodeMixRGB")
+    mult.blend_type = "MULTIPLY"
+    mult.inputs["Fac"].default_value = 1.0
+    mult.inputs["Color2"].default_value = (*fac, 1.0)
+    if src is not None:
+        nt.links.new(src, mult.inputs["Color1"])
+    else:
+        mult.inputs["Color1"].default_value = tuple(bc.default_value)
+    nt.links.new(mult.outputs["Color"], bc)
+    return mult, src
+
+
+def _untint_mult_node(mat, node, src):
+    nt = mat.node_tree
+    b = nt.nodes.get("Principled BSDF")
+    bc = b.inputs["Base Color"]
+    for l in list(bc.links):
+        nt.links.remove(l)
+    if src is not None:
+        nt.links.new(src, bc)
+    else:
+        pass  # default_value was never modified by the tint path
+    nt.nodes.remove(node)
+
+
 def bake_group_light_only(g, objs, res, samples, margin):
     """--warm pass: the LIGHT bake ONLY, on the blend's EXISTING atlas UVs
     (no uv_pass re-assignment — the certified rects stay authoritative),
-    saved as light_<g>_golden.png. No albedo pass (albedo is env-neutral
-    by contract)."""
+    saved as light_<g>_golden.png, PLUS the golden ALBEDO variant with the
+    road/ocean warm tint (pm's cool-albedo-cancels-warm-light fix). No
+    certified albedo is touched; the tint nodes are removed after."""
     import time
     t0 = time.time()
+
+    # golden albedo variant (tinted): temporary multiply on the tinted mats
+    alb_g = fresh_image("albedo_" + g + "_golden", res, linear=False)
+    tinted = []
+    for ob in objs:
+        for mat in ob.data.materials:
+            if mat and any(mat.name.startswith(p) for p in WARM_ALBEDO_TINT):
+                node, src = _tint_mult_node(mat, WARM_ALBEDO_TINT[
+                    next(p for p in WARM_ALBEDO_TINT
+                         if mat.name.startswith(p))])
+                tinted.append((mat, node, src))
+    for ob in objs:
+        for mat in ob.data.materials:
+            if mat:
+                ensure_img_node(mat, alb_g)
+    bpy.ops.object.select_all(action="DESELECT")
+    for ob in objs:
+        ob.select_set(True)
+    bpy.context.view_layer.objects.active = objs[0]
+    bpy.ops.object.bake(type="DIFFUSE", pass_filter={"COLOR"},
+                        use_clear=False, margin=margin)
+    amean, amax = image_stats(alb_g)
+    for mat, node, src in tinted:
+        _untint_mult_node(mat, node, src)
+    print("WARM_ALBEDO %s mean=%.4f max=%.4f tinted=%d"
+          % (g, amean, amax, len(tinted)))
+    ok_a = amax > 0.001
+    if ok_a:
+        save_png(alb_g)
+
     light = fresh_image("light_" + g + "_golden", res, linear=True)
     saved = {ob.name: [m for m in ob.data.materials if m] for ob in objs}
     lo = white_override(g, light)
@@ -165,7 +238,9 @@ def bake_group_light_only(g, objs, res, samples, margin):
           "ambient_mid=%.4f" % (g, res, len(objs), time.time() - t0, lmean,
                                 lmax, "VERIFY_OK" if ok_l else "VERIFY_FAIL",
                                 mid_frac))
-    return {"group": g, "light": "light_%s_golden.png" % g if ok_l else None,
+    return {"group": g,
+            "albedo": "albedo_%s_golden.png" % g if ok_a else None,
+            "light": "light_%s_golden.png" % g if ok_l else None,
             "ambient_mid": round(mid_frac, 4)}
 
 
