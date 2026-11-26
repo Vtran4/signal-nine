@@ -136,6 +136,11 @@ window.S9 = window.S9 || {};
       }
       const mesh = proto.mesh.clone();
       const wheels = [];
+      // WS-E LOD twins: collectLodGroups only walks the TRACK staticRoot, so traffic
+      // twins never distance-swap — they render STACKED (3x wheel geometry per corner,
+      // live-verified bd9b1dd). Traffic runs LOD0-only until a per-car distance swap
+      // is wired; hide the twins at spawn.
+      mesh.traverse((o) => { if (/_lod[12]$/.test(o.name || '')) o.visible = false; });
       mesh.traverse((o) => { if (/wheel/i.test(o.name || '')) { o.rotation.order = 'YXZ'; wheels.push(o); } });
       this.scene.add(mesh);
       const L = this.track.length;
@@ -255,6 +260,8 @@ window.S9 = window.S9 || {};
       const parts = [], hulls = [];
       c.mesh.traverse((o) => {
         if (!o.isMesh || !o.name) return;
+        // LOD twins never eject: they'd match /wheel_/ and clone the same debris 3x
+        if (/_lod[12]$/.test(o.name)) { hulls.push(o); return; }
         if (/wheel_|rim_/.test(o.name) || /bumper_[fr]/.test(o.name) || /_hood$/.test(o.name) || /bedpanel/.test(o.name)) parts.push(o);
         else hulls.push(o);
       });
